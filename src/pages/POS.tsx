@@ -30,7 +30,6 @@ interface CartItem {
   stock: number;
 }
 
-
 export default function POS() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
@@ -84,7 +83,6 @@ export default function POS() {
       ];
     });
   };
-
 
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) =>
@@ -160,16 +158,6 @@ export default function POS() {
     });
   };
 
-
-  const getCategoryIcon = (categoryName: string) => {
-    const name = categoryName.toLowerCase();
-    if (name.includes("beverage") || name.includes("drink") || name === "all") return "☕";
-    if (name.includes("pastry") || name.includes("bake")) return "🥐";
-    if (name.includes("food")) return "🥗";
-    if (name.includes("agri") || name.includes("farm")) return "🌱";
-    return "📦";
-  };
-
   const formatCurrency = (value: number) => {
     const currency = business?.currency || 'USD';
     return new Intl.NumberFormat('en-US', {
@@ -181,11 +169,11 @@ export default function POS() {
 
   return (
     <DashboardLayout>
-      <div className="flex h-[calc(100vh-7rem)] gap-6">
+      <div className="flex h-[calc(100vh-6.5rem)] gap-6">
         {/* Products Section */}
         <div className="flex flex-1 flex-col">
           {/* Search & Categories */}
-          <div className="mb-4 space-y-4">
+          <div className="mb-4 space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -193,16 +181,17 @@ export default function POS() {
                 placeholder="Search products or scan barcode..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
+                className="pl-9 h-10"
               />
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {allCategories.map((category) => (
                 <Button
                   key={category}
-                  variant={selectedCategory === category ? "default" : "secondary"}
+                  variant={selectedCategory === category ? "default" : "outline"}
                   size="sm"
                   onClick={() => setSelectedCategory(category)}
+                  className="h-8"
                 >
                   {category}
                 </Button>
@@ -215,34 +204,34 @@ export default function POS() {
             {productsLoading ? (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {[...Array(10)].map((_, i) => (
-                  <Skeleton key={i} className="h-32 rounded-xl" />
+                  <Skeleton key={i} className="h-28 rounded-lg" />
                 ))}
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {filteredProducts.map((product) => {
                   const stock = product.total_stock ?? 0;
-                  const category = categories?.find(c => c.id === product.category_id);
                   return (
                     <button
                       key={product.id}
                       onClick={() => addToCart(product)}
                       disabled={stock <= 0}
-                      className="group rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="rounded-lg border border-border bg-card p-3 text-left transition-colors hover:border-primary hover:bg-muted/50 active:bg-muted disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <div className="mb-3 flex h-16 w-full items-center justify-center rounded-lg bg-secondary">
-                        <span className="text-2xl">
-                          {getCategoryIcon(category?.name || "")}
-                        </span>
+                      <div className="mb-2 flex h-12 w-full items-center justify-center rounded-md bg-muted text-lg">
+                        📦
                       </div>
                       <h4 className="truncate text-sm font-medium text-foreground">
                         {product.name}
                       </h4>
                       <div className="mt-1 flex items-center justify-between">
-                        <span className="text-lg font-bold text-primary">
+                        <span className="text-base font-semibold text-primary tabular-nums">
                           {formatCurrency(product.sell_price)}
                         </span>
-                        <Badge variant={stock > 0 ? "secondary" : "destructive"} className="text-xs">
+                        <Badge 
+                          variant={stock > 0 ? "secondary" : "destructive"} 
+                          className="text-xs h-5"
+                        >
                           {stock}
                         </Badge>
                       </div>
@@ -255,85 +244,86 @@ export default function POS() {
         </div>
 
         {/* Cart Section */}
-        <div className="flex w-96 flex-col rounded-xl border border-border bg-card shadow-lg">
+        <div className="flex w-80 flex-col rounded-lg border border-border bg-card">
           {/* Cart Header */}
           <div className="flex items-center justify-between border-b border-border p-4">
             <div>
-              <h2 className="text-lg font-semibold text-foreground">Current Order</h2>
+              <h2 className="text-base font-semibold text-foreground">Current Order</h2>
               <p className="text-sm text-muted-foreground">{itemCount} items</p>
             </div>
             {cart.length > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearCart}>
-                <X className="mr-1 h-4 w-4" />
+              <Button variant="ghost" size="sm" onClick={clearCart} className="h-8 text-muted-foreground">
+                <X className="mr-1 h-3 w-3" />
                 Clear
               </Button>
             )}
           </div>
 
           {/* Customer Name */}
-          <div className="border-b border-border p-4">
+          <div className="border-b border-border p-3">
             <Input
               placeholder="Customer name (optional)"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
+              className="h-9"
             />
           </div>
 
           {/* Cart Items */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-3">
             {cart.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center text-center">
-                <Receipt className="mb-4 h-12 w-12 text-muted-foreground/50" />
-                <p className="text-muted-foreground">No items in cart</p>
-                <p className="text-sm text-muted-foreground/70">
+                <Receipt className="mb-3 h-10 w-10 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No items in cart</p>
+                <p className="text-xs text-muted-foreground/70">
                   Click products to add them
                 </p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {cart.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center gap-3 rounded-lg border border-border/50 p-3"
+                    className="flex items-center gap-2 rounded-md border border-border p-2"
                   >
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
                         {item.product.name}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground tabular-nums">
                         {formatCurrency(item.product.sell_price)} each
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-6 w-6"
                         onClick={() => updateQuantity(item.id, -1)}
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
-                      <span className="w-8 text-center text-sm font-medium">
+                      <span className="w-6 text-center text-sm font-medium tabular-nums">
                         {item.quantity}
                       </span>
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-7 w-7"
+                        className="h-6 w-6"
                         onClick={() => updateQuantity(item.id, 1)}
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
                     </div>
-                    <div className="w-16 text-right">
-                      <p className="text-sm font-semibold text-foreground">
+                    <div className="w-14 text-right">
+                      <p className="text-sm font-semibold text-foreground tabular-nums">
                         {formatCurrency(item.product.sell_price * item.quantity)}
                       </p>
                     </div>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-destructive hover:bg-destructive/10"
+                      className="h-6 w-6 text-muted-foreground hover:text-destructive"
                       onClick={() => removeFromCart(item.id)}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -345,7 +335,7 @@ export default function POS() {
           </div>
 
           {/* Cart Summary */}
-          <div className="border-t border-border p-4 space-y-4">
+          <div className="border-t border-border p-4 space-y-3">
             {/* Discount */}
             <div className="flex items-center gap-2">
               <span className="text-sm text-muted-foreground">Discount %</span>
@@ -355,25 +345,25 @@ export default function POS() {
                 max="100"
                 value={discount}
                 onChange={(e) => setDiscount(Number(e.target.value))}
-                className="h-8 w-20"
+                className="h-8 w-16"
               />
             </div>
 
             {/* Totals */}
-            <div className="space-y-2 text-sm">
+            <div className="space-y-1.5 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
-                <span>{formatCurrency(subtotal)}</span>
+                <span className="tabular-nums">{formatCurrency(subtotal)}</span>
               </div>
               {discount > 0 && (
                 <div className="flex justify-between text-success">
                   <span>Discount ({discount}%)</span>
-                  <span>-{formatCurrency(discountAmount)}</span>
+                  <span className="tabular-nums">-{formatCurrency(discountAmount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-lg font-bold text-foreground">
+              <div className="flex justify-between text-lg font-semibold text-foreground pt-1.5 border-t border-border">
                 <span>Total</span>
-                <span>{formatCurrency(total)}</span>
+                <span className="tabular-nums">{formatCurrency(total)}</span>
               </div>
             </div>
 
@@ -381,43 +371,42 @@ export default function POS() {
             <div className="grid grid-cols-3 gap-2">
               <Button 
                 variant="outline" 
-                className="flex-col h-16" 
+                className="flex-col h-14 gap-1" 
                 disabled={cart.length === 0 || createSale.isPending}
                 onClick={() => handleCheckout("cash")}
               >
-                <Banknote className="mb-1 h-5 w-5" />
+                <Banknote className="h-4 w-4" />
                 <span className="text-xs">Cash</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="flex-col h-16" 
+                className="flex-col h-14 gap-1" 
                 disabled={cart.length === 0 || createSale.isPending}
                 onClick={() => handleCheckout("card")}
               >
-                <CreditCard className="mb-1 h-5 w-5" />
+                <CreditCard className="h-4 w-4" />
                 <span className="text-xs">Card</span>
               </Button>
               <Button 
                 variant="outline" 
-                className="flex-col h-16" 
+                className="flex-col h-14 gap-1" 
                 disabled={cart.length === 0 || createSale.isPending}
                 onClick={() => handleCheckout("qris")}
               >
-                <QrCode className="mb-1 h-5 w-5" />
+                <QrCode className="h-4 w-4" />
                 <span className="text-xs">QRIS</span>
               </Button>
             </div>
 
             <Button 
-              variant="glow" 
-              className="w-full h-12 text-base" 
+              className="w-full h-11" 
               disabled={cart.length === 0 || createSale.isPending}
               onClick={() => handleCheckout("cash")}
             >
               {createSale.isPending ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Receipt className="mr-2 h-5 w-5" />
+                <Receipt className="mr-2 h-4 w-4" />
               )}
               Complete Sale
             </Button>
