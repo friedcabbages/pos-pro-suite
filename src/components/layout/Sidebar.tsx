@@ -14,6 +14,10 @@ import {
   LogOut,
   Users,
   DollarSign,
+  Truck,
+  ClipboardList,
+  Boxes,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -21,12 +25,14 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "POS / Cashier", href: "/pos", icon: ShoppingCart },
   { name: "Products", href: "/products", icon: Package },
+  { name: "Inventory", href: "/inventory", icon: Boxes },
   { name: "Suppliers", href: "/suppliers", icon: Truck },
   { name: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList },
   { name: "Warehouses", href: "/warehouses", icon: Warehouse },
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Expenses", href: "/expenses", icon: DollarSign },
   { name: "Reports", href: "/reports", icon: TrendingUp },
+  { name: "Audit Logs", href: "/audit-logs", icon: FileText },
   { name: "Users", href: "/users", icon: Users },
   { name: "Settings", href: "/settings", icon: Settings },
 ];

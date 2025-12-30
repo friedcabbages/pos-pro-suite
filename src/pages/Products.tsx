@@ -327,7 +327,7 @@ export default function Products() {
                 ) : (
                   filteredProducts.map((product) => {
                     const status = getProductStatus(product);
-                    const stock = product.inventory?.[0]?.quantity || 0;
+                    const stock = product.total_stock ?? 0;
                     const category = categories?.find(c => c.id === product.category_id);
                     return (
                       <TableRow key={product.id} className="group">

@@ -151,7 +151,7 @@ export default function Transactions() {
                       </TableCell>
                       <TableCell>{tx.customer_name || "Walk-in"}</TableCell>
                       <TableCell className="text-right">
-                        {tx.sale_items?.length || 0}
+                        {tx.items?.length || 0}
                       </TableCell>
                       <TableCell className="text-right font-semibold text-primary">
                         {formatCurrency(tx.total)}
