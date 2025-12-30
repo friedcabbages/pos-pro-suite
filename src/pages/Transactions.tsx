@@ -11,70 +11,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Calendar, Search, Download, Eye, Receipt, Filter } from "lucide-react";
-
-const transactions = [
-  {
-    id: "TXN-2024-001",
-    date: "2024-01-15 14:32",
-    customer: "Walk-in Customer",
-    items: 5,
-    subtotal: 125.5,
-    discount: 10,
-    total: 115.5,
-    payment: "Cash",
-    status: "completed",
-    cashier: "John Doe",
-  },
-  {
-    id: "TXN-2024-002",
-    date: "2024-01-15 13:45",
-    customer: "Maria Garcia",
-    items: 3,
-    subtotal: 89.0,
-    discount: 0,
-    total: 89.0,
-    payment: "Card",
-    status: "completed",
-    cashier: "Jane Smith",
-  },
-  {
-    id: "TXN-2024-003",
-    date: "2024-01-15 12:20",
-    customer: "Robert Chen",
-    items: 8,
-    subtotal: 234.75,
-    discount: 15,
-    total: 219.75,
-    payment: "QRIS",
-    status: "completed",
-    cashier: "John Doe",
-  },
-  {
-    id: "TXN-2024-004",
-    date: "2024-01-15 11:15",
-    customer: "Walk-in Customer",
-    items: 2,
-    subtotal: 45.0,
-    discount: 0,
-    total: 45.0,
-    payment: "Cash",
-    status: "refunded",
-    cashier: "Jane Smith",
-  },
-  {
-    id: "TXN-2024-005",
-    date: "2024-01-15 10:05",
-    customer: "Ahmad Yusuf",
-    items: 12,
-    subtotal: 567.25,
-    discount: 25,
-    total: 542.25,
-    payment: "Transfer",
-    status: "completed",
-    cashier: "John Doe",
-  },
-];
+import { Calendar, Search, Download, Eye, Filter } from "lucide-react";
+import { useSales } from "@/hooks/useSales";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
 
 const statusStyles = {
   completed: "bg-success/10 text-success border-success/30",
@@ -82,25 +23,37 @@ const statusStyles = {
   pending: "bg-muted text-muted-foreground border-border",
 };
 
-const paymentStyles = {
-  Cash: "bg-primary/10 text-primary",
-  Card: "bg-secondary text-secondary-foreground",
-  QRIS: "bg-accent/10 text-accent-foreground",
-  Transfer: "bg-muted text-muted-foreground",
+const paymentStyles: Record<string, string> = {
+  cash: "bg-primary/10 text-primary",
+  card: "bg-secondary text-secondary-foreground",
+  qris: "bg-accent/10 text-accent-foreground",
+  transfer: "bg-muted text-muted-foreground",
+  other: "bg-muted text-muted-foreground",
 };
 
 export default function Transactions() {
   const [search, setSearch] = useState("");
+  const { sales, isLoading } = useSales();
+  const { business } = useBusiness();
 
-  const filteredTransactions = transactions.filter(
+  const filteredTransactions = sales?.filter(
     (tx) =>
-      tx.id.toLowerCase().includes(search.toLowerCase()) ||
-      tx.customer.toLowerCase().includes(search.toLowerCase())
-  );
+      tx.invoice_number.toLowerCase().includes(search.toLowerCase()) ||
+      (tx.customer_name?.toLowerCase().includes(search.toLowerCase()) ?? false)
+  ) || [];
 
-  const totalRevenue = transactions
-    .filter((tx) => tx.status === "completed")
-    .reduce((sum, tx) => sum + tx.total, 0);
+  const totalRevenue = sales?.reduce((sum, tx) => sum + tx.total, 0) || 0;
+  const completedCount = sales?.length || 0;
+  const avgOrder = completedCount > 0 ? totalRevenue / completedCount : 0;
+
+  const formatCurrency = (value: number) => {
+    const currency = business?.currency || 'USD';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+    }).format(value);
+  };
 
   return (
     <DashboardLayout>
@@ -124,21 +77,21 @@ export default function Transactions() {
         {/* Summary Cards */}
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-border bg-card p-4 shadow-card">
-            <p className="text-sm text-muted-foreground">Today's Transactions</p>
+            <p className="text-sm text-muted-foreground">Total Transactions</p>
             <p className="mt-1 text-2xl font-bold text-foreground">
-              {transactions.length}
+              {isLoading ? <Skeleton className="h-8 w-20" /> : completedCount}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 shadow-card">
             <p className="text-sm text-muted-foreground">Total Revenue</p>
             <p className="mt-1 text-2xl font-bold text-primary">
-              ${totalRevenue.toFixed(2)}
+              {isLoading ? <Skeleton className="h-8 w-24" /> : formatCurrency(totalRevenue)}
             </p>
           </div>
           <div className="rounded-xl border border-border bg-card p-4 shadow-card">
             <p className="text-sm text-muted-foreground">Average Order</p>
             <p className="mt-1 text-2xl font-bold text-foreground">
-              ${(totalRevenue / transactions.filter((tx) => tx.status === "completed").length).toFixed(2)}
+              {isLoading ? <Skeleton className="h-8 w-20" /> : formatCurrency(avgOrder)}
             </p>
           </div>
         </div>
@@ -149,7 +102,7 @@ export default function Transactions() {
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Search by transaction ID or customer..."
+              placeholder="Search by invoice or customer..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-10"
@@ -167,66 +120,71 @@ export default function Transactions() {
 
         {/* Transactions Table */}
         <div className="rounded-xl border border-border bg-card shadow-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Transaction ID</TableHead>
-                <TableHead>Date & Time</TableHead>
-                <TableHead>Customer</TableHead>
-                <TableHead className="text-right">Items</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Cashier</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredTransactions.map((tx) => (
-                <TableRow key={tx.id} className="group">
-                  <TableCell className="font-mono text-sm font-medium text-foreground">
-                    {tx.id}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {tx.date}
-                  </TableCell>
-                  <TableCell>{tx.customer}</TableCell>
-                  <TableCell className="text-right">{tx.items}</TableCell>
-                  <TableCell className="text-right font-semibold text-primary">
-                    ${tx.total.toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={paymentStyles[tx.payment as keyof typeof paymentStyles]}
-                    >
-                      {tx.payment}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="outline"
-                      className={statusStyles[tx.status as keyof typeof statusStyles]}
-                    >
-                      {tx.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {tx.cashier}
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="opacity-0 group-hover:opacity-100"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
+          {isLoading ? (
+            <div className="p-6 space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Invoice</TableHead>
+                  <TableHead>Date & Time</TableHead>
+                  <TableHead>Customer</TableHead>
+                  <TableHead className="text-right">Items</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead>Payment</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTransactions.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No transactions found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredTransactions.map((tx) => (
+                    <TableRow key={tx.id} className="group">
+                      <TableCell className="font-mono text-sm font-medium text-foreground">
+                        {tx.invoice_number}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(tx.created_at), "MMM d, yyyy HH:mm")}
+                      </TableCell>
+                      <TableCell>{tx.customer_name || "Walk-in"}</TableCell>
+                      <TableCell className="text-right">
+                        {tx.sale_items?.length || 0}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-primary">
+                        {formatCurrency(tx.total)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={paymentStyles[tx.payment_method] || paymentStyles.other}
+                        >
+                          {tx.payment_method}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="opacity-0 group-hover:opacity-100"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
       </div>
     </DashboardLayout>

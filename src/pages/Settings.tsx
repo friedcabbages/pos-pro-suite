@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,14 +15,120 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Building2,
   DollarSign,
-  Receipt,
   Package,
-  Warehouse,
   Bell,
   Save,
+  Loader2,
 } from "lucide-react";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Settings() {
+  const { business, refetchBusiness } = useBusiness();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  
+  const [businessData, setBusinessData] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    address: "",
+    currency: "USD",
+  });
+
+  const [settings, setSettings] = useState({
+    enable_tax: false,
+    default_tax_rate: 0,
+    enable_multi_warehouse: true,
+    enable_expiry_tracking: false,
+    enable_expenses: true,
+  });
+
+  useEffect(() => {
+    if (business) {
+      setBusinessData({
+        name: business.name || "",
+        email: business.email || "",
+        phone: business.phone || "",
+        address: business.address || "",
+        currency: business.currency || "USD",
+      });
+      fetchSettings();
+    }
+  }, [business]);
+
+  const fetchSettings = async () => {
+    if (!business?.id) return;
+    
+    setSettingsLoading(true);
+    const { data } = await supabase
+      .from("settings")
+      .select("*")
+      .eq("business_id", business.id)
+      .single();
+
+    if (data) {
+      setSettings({
+        enable_tax: data.enable_tax || false,
+        default_tax_rate: data.default_tax_rate || 0,
+        enable_multi_warehouse: data.enable_multi_warehouse ?? true,
+        enable_expiry_tracking: data.enable_expiry_tracking || false,
+        enable_expenses: data.enable_expenses ?? true,
+      });
+    }
+    setSettingsLoading(false);
+  };
+
+  const handleSaveBusiness = async () => {
+    if (!business?.id) return;
+    
+    setLoading(true);
+    const { error } = await supabase
+      .from("businesses")
+      .update({
+        name: businessData.name,
+        email: businessData.email,
+        phone: businessData.phone,
+        address: businessData.address,
+        currency: businessData.currency,
+      })
+      .eq("id", business.id);
+
+    if (error) {
+      toast({ title: "Failed to save", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Business settings saved" });
+      refetchBusiness();
+    }
+    setLoading(false);
+  };
+
+  const handleSaveSettings = async () => {
+    if (!business?.id) return;
+    
+    setLoading(true);
+    const { error } = await supabase
+      .from("settings")
+      .update({
+        enable_tax: settings.enable_tax,
+        default_tax_rate: settings.default_tax_rate,
+        enable_multi_warehouse: settings.enable_multi_warehouse,
+        enable_expiry_tracking: settings.enable_expiry_tracking,
+        enable_expenses: settings.enable_expenses,
+      })
+      .eq("business_id", business.id);
+
+    if (error) {
+      toast({ title: "Failed to save", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Settings saved" });
+    }
+    setLoading(false);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -50,10 +157,6 @@ export default function Settings() {
               <Package className="h-4 w-4" />
               Modules
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="gap-2">
-              <Bell className="h-4 w-4" />
-              Notifications
-            </TabsTrigger>
           </TabsList>
 
           {/* Business Settings */}
@@ -65,38 +168,58 @@ export default function Settings() {
               <div className="grid gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="businessName">Business Name</Label>
-                  <Input id="businessName" defaultValue="VeloPOS Store" />
+                  <Input 
+                    id="businessName" 
+                    value={businessData.name}
+                    onChange={(e) => setBusinessData({ ...businessData, name: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="businessType">Business Type</Label>
-                  <Select defaultValue="retail">
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select 
+                    value={businessData.currency} 
+                    onValueChange={(v) => setBusinessData({ ...businessData, currency: v })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="cafe">Café & Restaurant</SelectItem>
-                      <SelectItem value="retail">Retail Store</SelectItem>
-                      <SelectItem value="agriculture">Agriculture</SelectItem>
-                      <SelectItem value="warehouse">Warehouse & Distribution</SelectItem>
-                      <SelectItem value="sme">SME / General</SelectItem>
+                      <SelectItem value="USD">USD - US Dollar</SelectItem>
+                      <SelectItem value="IDR">IDR - Indonesian Rupiah</SelectItem>
+                      <SelectItem value="EUR">EUR - Euro</SelectItem>
+                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
-                  <Input id="email" type="email" defaultValue="contact@velpos.com" />
+                  <Input 
+                    id="email" 
+                    type="email" 
+                    value={businessData.email}
+                    onChange={(e) => setBusinessData({ ...businessData, email: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
-                  <Input id="phone" defaultValue="+62 812 3456 7890" />
+                  <Input 
+                    id="phone" 
+                    value={businessData.phone}
+                    onChange={(e) => setBusinessData({ ...businessData, phone: e.target.value })}
+                  />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="address">Address</Label>
-                  <Input id="address" defaultValue="Jl. Sudirman No. 123, Jakarta" />
+                  <Input 
+                    id="address" 
+                    value={businessData.address}
+                    onChange={(e) => setBusinessData({ ...businessData, address: e.target.value })}
+                  />
                 </div>
               </div>
               <div className="mt-6 flex justify-end">
-                <Button variant="glow">
+                <Button variant="glow" onClick={handleSaveBusiness} disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <Save className="mr-2 h-4 w-4" />
                   Save Changes
                 </Button>
@@ -110,46 +233,40 @@ export default function Settings() {
               <h3 className="mb-6 text-lg font-semibold text-foreground">
                 Financial Settings
               </h3>
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select defaultValue="usd">
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="usd">USD - US Dollar</SelectItem>
-                      <SelectItem value="idr">IDR - Indonesian Rupiah</SelectItem>
-                      <SelectItem value="eur">EUR - Euro</SelectItem>
-                      <SelectItem value="gbp">GBP - British Pound</SelectItem>
-                    </SelectContent>
-                  </Select>
+              {settingsLoading ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="taxRate">Default Tax Rate (%)</Label>
-                  <Input id="taxRate" type="number" defaultValue="10" />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border p-4 sm:col-span-2">
-                  <div>
-                    <p className="font-medium text-foreground">Enable Tax</p>
-                    <p className="text-sm text-muted-foreground">
-                      Apply tax to all transactions
-                    </p>
+              ) : (
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="taxRate">Default Tax Rate (%)</Label>
+                    <Input 
+                      id="taxRate" 
+                      type="number" 
+                      value={settings.default_tax_rate}
+                      onChange={(e) => setSettings({ ...settings, default_tax_rate: Number(e.target.value) })}
+                    />
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border p-4 sm:col-span-2">
-                  <div>
-                    <p className="font-medium text-foreground">Auto-calculate Profit</p>
-                    <p className="text-sm text-muted-foreground">
-                      Automatically calculate profit margin from cost and selling price
-                    </p>
+                  <div className="flex items-center justify-between rounded-lg border border-border p-4 sm:col-span-2">
+                    <div>
+                      <p className="font-medium text-foreground">Enable Tax</p>
+                      <p className="text-sm text-muted-foreground">
+                        Apply tax to all transactions
+                      </p>
+                    </div>
+                    <Switch 
+                      checked={settings.enable_tax}
+                      onCheckedChange={(v) => setSettings({ ...settings, enable_tax: v })}
+                    />
                   </div>
-                  <Switch defaultChecked />
                 </div>
-              </div>
+              )}
               <div className="mt-6 flex justify-end">
-                <Button variant="glow">
+                <Button variant="glow" onClick={handleSaveSettings} disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <Save className="mr-2 h-4 w-4" />
                   Save Changes
                 </Button>
@@ -166,110 +283,55 @@ export default function Settings() {
               <p className="mb-6 text-sm text-muted-foreground">
                 Enable or disable features based on your business needs
               </p>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                      <Warehouse className="h-5 w-5 text-primary" />
-                    </div>
+              {settingsLoading ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
                     <div>
                       <p className="font-medium text-foreground">Multi-Warehouse</p>
                       <p className="text-sm text-muted-foreground">
                         Manage multiple warehouse locations
                       </p>
                     </div>
+                    <Switch 
+                      checked={settings.enable_multi_warehouse}
+                      onCheckedChange={(v) => setSettings({ ...settings, enable_multi_warehouse: v })}
+                    />
                   </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-warning/10">
-                      <Package className="h-5 w-5 text-warning" />
-                    </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
                     <div>
                       <p className="font-medium text-foreground">Expiry Tracking</p>
                       <p className="text-sm text-muted-foreground">
                         Track product expiration dates
                       </p>
                     </div>
+                    <Switch 
+                      checked={settings.enable_expiry_tracking}
+                      onCheckedChange={(v) => setSettings({ ...settings, enable_expiry_tracking: v })}
+                    />
                   </div>
-                  <Switch />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/10">
-                      <Receipt className="h-5 w-5 text-success" />
-                    </div>
+                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
                     <div>
                       <p className="font-medium text-foreground">Expense Module</p>
                       <p className="text-sm text-muted-foreground">
                         Track and manage business expenses
                       </p>
                     </div>
+                    <Switch 
+                      checked={settings.enable_expenses}
+                      onCheckedChange={(v) => setSettings({ ...settings, enable_expenses: v })}
+                    />
                   </div>
-                  <Switch defaultChecked />
                 </div>
-                <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-destructive/10">
-                      <DollarSign className="h-5 w-5 text-destructive" />
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">Tax Module</p>
-                      <p className="text-sm text-muted-foreground">
-                        Apply taxes to transactions
-                      </p>
-                    </div>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-              </div>
+              )}
               <div className="mt-6 flex justify-end">
-                <Button variant="glow">
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </TabsContent>
-
-          {/* Notification Settings */}
-          <TabsContent value="notifications">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-              <h3 className="mb-6 text-lg font-semibold text-foreground">
-                Notification Preferences
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div>
-                    <p className="font-medium text-foreground">Low Stock Alerts</p>
-                    <p className="text-sm text-muted-foreground">
-                      Get notified when products are running low
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div>
-                    <p className="font-medium text-foreground">Daily Sales Report</p>
-                    <p className="text-sm text-muted-foreground">
-                      Receive daily sales summary via email
-                    </p>
-                  </div>
-                  <Switch defaultChecked />
-                </div>
-                <div className="flex items-center justify-between rounded-lg border border-border p-4">
-                  <div>
-                    <p className="font-medium text-foreground">New Transaction</p>
-                    <p className="text-sm text-muted-foreground">
-                      Sound notification for new transactions
-                    </p>
-                  </div>
-                  <Switch />
-                </div>
-              </div>
-              <div className="mt-6 flex justify-end">
-                <Button variant="glow">
+                <Button variant="glow" onClick={handleSaveSettings} disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   <Save className="mr-2 h-4 w-4" />
                   Save Changes
                 </Button>

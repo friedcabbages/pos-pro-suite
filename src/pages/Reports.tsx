@@ -19,26 +19,55 @@ import {
   Pie,
   Cell,
 } from "recharts";
-import { Download, Calendar, TrendingUp, DollarSign, Receipt, Package } from "lucide-react";
+import { Download, TrendingUp, DollarSign, Receipt, Package } from "lucide-react";
+import { useDashboard } from "@/hooks/useDashboard";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
 
-const salesData = [
-  { month: "Jan", sales: 45000, profit: 12000 },
-  { month: "Feb", sales: 52000, profit: 15000 },
-  { month: "Mar", sales: 48000, profit: 13500 },
-  { month: "Apr", sales: 61000, profit: 18000 },
-  { month: "May", sales: 55000, profit: 16000 },
-  { month: "Jun", sales: 67000, profit: 21000 },
-];
-
-const categoryData = [
-  { name: "Beverages", value: 35, color: "hsl(160 84% 45%)" },
-  { name: "Food", value: 25, color: "hsl(142 76% 45%)" },
-  { name: "Wholesale", value: 20, color: "hsl(38 92% 55%)" },
-  { name: "Agriculture", value: 12, color: "hsl(217 91% 60%)" },
-  { name: "Others", value: 8, color: "hsl(var(--muted-foreground))" },
+const categoryColors = [
+  "hsl(160 84% 45%)",
+  "hsl(142 76% 45%)",
+  "hsl(38 92% 55%)",
+  "hsl(217 91% 60%)",
+  "hsl(var(--muted-foreground))",
 ];
 
 export default function Reports() {
+  const { dailySales, productMargins, isLoading } = useDashboard();
+  const { business } = useBusiness();
+
+  const formatCurrency = (value: number) => {
+    const currency = business?.currency || 'USD';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+    }).format(value);
+  };
+
+  // Transform daily sales for chart
+  const salesData = dailySales?.slice(0, 7).reverse().map(d => ({
+    date: format(new Date(d.sale_date!), "MMM d"),
+    sales: d.total_revenue || 0,
+    profit: d.total_profit || 0,
+  })) || [];
+
+  // Calculate totals
+  const totalRevenue = dailySales?.reduce((sum, d) => sum + (d.total_revenue || 0), 0) || 0;
+  const totalProfit = dailySales?.reduce((sum, d) => sum + (d.total_profit || 0), 0) || 0;
+  const totalOrders = dailySales?.reduce((sum, d) => sum + (d.total_transactions || 0), 0) || 0;
+  const totalCogs = dailySales?.reduce((sum, d) => sum + (d.total_cogs || 0), 0) || 0;
+
+  // Get top products for pie chart
+  const topProducts = productMargins?.slice(0, 5).map((p, i) => ({
+    name: p.name,
+    value: p.stock_value || 0,
+    color: categoryColors[i % categoryColors.length],
+  })) || [];
+
+  const totalStockValue = topProducts.reduce((sum, p) => sum + p.value, 0);
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -73,54 +102,64 @@ export default function Reports() {
 
         {/* Summary Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
-                <DollarSign className="h-6 w-6 text-primary" />
+          {isLoading ? (
+            [...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-28 rounded-xl" />
+            ))
+          ) : (
+            <>
+              <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10">
+                    <DollarSign className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Revenue</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Revenue</p>
-                <p className="text-2xl font-bold text-foreground">$328,000</p>
-                <p className="text-xs text-success">+12.5% vs last period</p>
+              <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10">
+                    <TrendingUp className="h-6 w-6 text-success" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Gross Profit</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(totalProfit)}</p>
+                    <p className="text-xs text-success">
+                      {totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : 0}% margin
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/10">
-                <TrendingUp className="h-6 w-6 text-success" />
+              <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10">
+                    <Receipt className="h-6 w-6 text-warning" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Orders</p>
+                    <p className="text-2xl font-bold text-foreground">{totalOrders}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Gross Profit</p>
-                <p className="text-2xl font-bold text-foreground">$95,500</p>
-                <p className="text-xs text-success">29.1% margin</p>
+              <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10">
+                    <Package className="h-6 w-6 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">COGS</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(totalCogs)}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {totalRevenue > 0 ? ((totalCogs / totalRevenue) * 100).toFixed(1) : 0}% of revenue
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-warning/10">
-                <Receipt className="h-6 w-6 text-warning" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total Orders</p>
-                <p className="text-2xl font-bold text-foreground">4,823</p>
-                <p className="text-xs text-success">+8.3% vs last period</p>
-              </div>
-            </div>
-          </div>
-          <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-destructive/10">
-                <Package className="h-6 w-6 text-destructive" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">COGS</p>
-                <p className="text-2xl font-bold text-foreground">$232,500</p>
-                <p className="text-xs text-muted-foreground">70.9% of revenue</p>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
 
         {/* Charts */}
@@ -130,81 +169,101 @@ export default function Reports() {
             <h3 className="mb-6 text-lg font-semibold text-foreground">
               Sales vs Profit Trend
             </h3>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={salesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis
-                    dataKey="month"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    tickFormatter={(value) => `$${value / 1000}k`}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
-                  />
-                  <Bar dataKey="sales" fill="hsl(160 84% 45%)" radius={[4, 4, 0, 0]} name="Sales" />
-                  <Bar dataKey="profit" fill="hsl(142 76% 45%)" radius={[4, 4, 0, 0]} name="Profit" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            {isLoading ? (
+              <Skeleton className="h-[300px] w-full" />
+            ) : salesData.length === 0 ? (
+              <div className="flex h-[300px] items-center justify-center text-muted-foreground">
+                No sales data available
+              </div>
+            ) : (
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={salesData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis
+                      dataKey="date"
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                    />
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={12}
+                      tickFormatter={(value) => `${formatCurrency(value)}`}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--card))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                      }}
+                      formatter={(value: number) => [formatCurrency(value), ""]}
+                    />
+                    <Bar dataKey="sales" fill="hsl(160 84% 45%)" radius={[4, 4, 0, 0]} name="Sales" />
+                    <Bar dataKey="profit" fill="hsl(142 76% 45%)" radius={[4, 4, 0, 0]} name="Profit" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
 
           {/* Pie Chart */}
           <div className="rounded-xl border border-border bg-card p-6 shadow-card">
             <h3 className="mb-6 text-lg font-semibold text-foreground">
-              Sales by Category
+              Top Products by Value
             </h3>
-            <div className="h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={categoryData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={2}
-                    dataKey="value"
-                  >
-                    {categoryData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--card))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px",
-                    }}
-                    formatter={(value: number) => [`${value}%`, ""]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-4 space-y-2">
-              {categoryData.map((item) => (
-                <div key={item.name} className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="h-3 w-3 rounded-full"
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <span className="text-muted-foreground">{item.name}</span>
-                  </div>
-                  <span className="font-medium text-foreground">{item.value}%</span>
+            {isLoading ? (
+              <Skeleton className="h-[200px] w-full" />
+            ) : topProducts.length === 0 ? (
+              <div className="flex h-[200px] items-center justify-center text-muted-foreground">
+                No product data
+              </div>
+            ) : (
+              <>
+                <div className="h-[200px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={topProducts}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={80}
+                        paddingAngle={2}
+                        dataKey="value"
+                      >
+                        {topProducts.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                        }}
+                        formatter={(value: number) => [formatCurrency(value), ""]}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
-              ))}
-            </div>
+                <div className="mt-4 space-y-2">
+                  {topProducts.map((item) => (
+                    <div key={item.name} className="flex items-center justify-between text-sm">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="text-muted-foreground truncate max-w-[120px]">{item.name}</span>
+                      </div>
+                      <span className="font-medium text-foreground">
+                        {totalStockValue > 0 ? ((item.value / totalStockValue) * 100).toFixed(0) : 0}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

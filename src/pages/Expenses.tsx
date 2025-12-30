@@ -2,6 +2,7 @@ import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -12,84 +13,105 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Plus,
   Search,
   Download,
   Calendar,
   DollarSign,
   TrendingUp,
-  Building2,
-  Zap,
-  Users,
-  Truck,
+  Loader2,
 } from "lucide-react";
+import { useExpenses } from "@/hooks/useExpenses";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
-const expenses = [
-  {
-    id: "EXP-001",
-    date: "2024-01-15",
-    category: "Rent",
-    description: "Monthly store rent - Main Branch",
-    amount: 2500.0,
-    warehouse: "Main Warehouse",
-    icon: Building2,
-  },
-  {
-    id: "EXP-002",
-    date: "2024-01-14",
-    category: "Utilities",
-    description: "Electricity bill - January",
-    amount: 450.0,
-    warehouse: "Main Warehouse",
-    icon: Zap,
-  },
-  {
-    id: "EXP-003",
-    date: "2024-01-13",
-    category: "Salary",
-    description: "Staff salary - Week 2",
-    amount: 3200.0,
-    warehouse: "Global",
-    icon: Users,
-  },
-  {
-    id: "EXP-004",
-    date: "2024-01-12",
-    category: "Operational",
-    description: "Delivery truck fuel",
-    amount: 180.0,
-    warehouse: "Distribution Center",
-    icon: Truck,
-  },
-  {
-    id: "EXP-005",
-    date: "2024-01-11",
-    category: "Utilities",
-    description: "Internet and phone",
-    amount: 120.0,
-    warehouse: "Main Warehouse",
-    icon: Zap,
-  },
-];
-
-const categoryColors = {
-  Rent: "bg-primary/10 text-primary",
-  Utilities: "bg-warning/10 text-warning",
-  Salary: "bg-success/10 text-success",
-  Operational: "bg-secondary text-secondary-foreground",
+const categoryColors: Record<string, string> = {
+  rent: "bg-primary/10 text-primary",
+  utilities: "bg-warning/10 text-warning",
+  salary: "bg-success/10 text-success",
+  operational: "bg-secondary text-secondary-foreground",
+  marketing: "bg-accent/10 text-accent-foreground",
+  other: "bg-muted text-muted-foreground",
 };
+
+const expenseCategories = ["rent", "utilities", "salary", "operational", "marketing", "other"];
 
 export default function Expenses() {
   const [search, setSearch] = useState("");
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({
+    category: "operational",
+    description: "",
+    amount: 0,
+    expense_date: new Date().toISOString().split("T")[0],
+  });
 
-  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const avgExpense = totalExpenses / expenses.length;
+  const { expenses, isLoading, createExpense } = useExpenses();
+  const { business, branch } = useBusiness();
+  const { toast } = useToast();
 
-  const filteredExpenses = expenses.filter(
+  const totalExpenses = expenses?.reduce((sum, exp) => sum + exp.amount, 0) || 0;
+  const avgExpense = expenses?.length ? totalExpenses / expenses.length : 0;
+
+  const filteredExpenses = expenses?.filter(
     (exp) =>
-      exp.description.toLowerCase().includes(search.toLowerCase()) ||
+      (exp.description?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
       exp.category.toLowerCase().includes(search.toLowerCase())
-  );
+  ) || [];
+
+  const formatCurrency = (value: number) => {
+    const currency = business?.currency || 'USD';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+    }).format(value);
+  };
+
+  const handleCreate = () => {
+    if (!formData.description.trim() || formData.amount <= 0) {
+      toast({ title: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+
+    createExpense.mutate({
+      category: formData.category,
+      description: formData.description,
+      amount: formData.amount,
+      expense_date: formData.expense_date,
+      branch_id: branch?.id || null,
+    }, {
+      onSuccess: () => {
+        setIsDialogOpen(false);
+        setFormData({
+          category: "operational",
+          description: "",
+          amount: 0,
+          expense_date: new Date().toISOString().split("T")[0],
+        });
+        toast({ title: "Expense created" });
+      },
+      onError: (error: any) => {
+        toast({ title: "Failed to create expense", description: error.message, variant: "destructive" });
+      },
+    });
+  };
 
   return (
     <DashboardLayout>
@@ -104,10 +126,66 @@ export default function Expenses() {
               Track and manage business expenses
             </p>
           </div>
-          <Button variant="glow">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Expense
-          </Button>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="glow">
+                <Plus className="mr-2 h-4 w-4" />
+                Add Expense
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add Expense</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select value={formData.category} onValueChange={(v) => setFormData({ ...formData, category: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {expenseCategories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat.charAt(0).toUpperCase() + cat.slice(1)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Description *</Label>
+                  <Input
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    placeholder="Expense description"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Amount *</Label>
+                    <Input
+                      type="number"
+                      value={formData.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date</Label>
+                    <Input
+                      type="date"
+                      value={formData.expense_date}
+                      onChange={(e) => setFormData({ ...formData, expense_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleCreate} className="w-full" disabled={createExpense.isPending}>
+                  {createExpense.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Add Expense
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Summary Cards */}
@@ -120,7 +198,7 @@ export default function Expenses() {
               <div>
                 <p className="text-sm text-muted-foreground">Total Expenses</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${totalExpenses.toFixed(2)}
+                  {isLoading ? <Skeleton className="h-8 w-24" /> : formatCurrency(totalExpenses)}
                 </p>
               </div>
             </div>
@@ -133,7 +211,7 @@ export default function Expenses() {
               <div>
                 <p className="text-sm text-muted-foreground">Average Expense</p>
                 <p className="text-2xl font-bold text-foreground">
-                  ${avgExpense.toFixed(2)}
+                  {isLoading ? <Skeleton className="h-8 w-20" /> : formatCurrency(avgExpense)}
                 </p>
               </div>
             </div>
@@ -144,9 +222,9 @@ export default function Expenses() {
                 <Calendar className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">This Month</p>
+                <p className="text-sm text-muted-foreground">Total Entries</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {expenses.length} entries
+                  {isLoading ? <Skeleton className="h-8 w-16" /> : expenses?.length || 0}
                 </p>
               </div>
             </div>
@@ -177,48 +255,55 @@ export default function Expenses() {
 
         {/* Expenses Table */}
         <div className="rounded-xl border border-border bg-card shadow-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Warehouse</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredExpenses.map((expense) => (
-                <TableRow key={expense.id} className="group">
-                  <TableCell className="font-mono text-sm text-muted-foreground">
-                    {expense.id}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {expense.date}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className={categoryColors[expense.category as keyof typeof categoryColors]}
-                    >
-                      <expense.icon className="mr-1 h-3 w-3" />
-                      {expense.category}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="max-w-xs truncate">
-                    {expense.description}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {expense.warehouse}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold text-destructive">
-                    -${expense.amount.toFixed(2)}
-                  </TableCell>
-                </TableRow>
+          {isLoading ? (
+            <div className="p-6 space-y-4">
+              {[...Array(5)].map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
               ))}
-            </TableBody>
-          </Table>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredExpenses.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No expenses found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredExpenses.map((expense) => (
+                    <TableRow key={expense.id} className="group">
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(expense.expense_date), "MMM d, yyyy")}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className={categoryColors[expense.category.toLowerCase()] || categoryColors.other}
+                        >
+                          {expense.category}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="max-w-xs truncate">
+                        {expense.description}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold text-destructive">
+                        -{formatCurrency(expense.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
       </div>
     </DashboardLayout>
