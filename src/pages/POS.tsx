@@ -221,7 +221,7 @@ export default function POS() {
             ) : (
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {filteredProducts.map((product) => {
-                  const stock = product.inventory?.[0]?.quantity || 0;
+                  const stock = product.total_stock ?? 0;
                   const category = categories?.find(c => c.id === product.category_id);
                   return (
                     <button
@@ -298,10 +298,10 @@ export default function POS() {
                   >
                     <div className="flex-1 min-w-0">
                       <p className="truncate text-sm font-medium text-foreground">
-                        {item.name}
+                        {item.product.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatCurrency(item.price)} each
+                        {formatCurrency(item.product.sell_price)} each
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -327,7 +327,7 @@ export default function POS() {
                     </div>
                     <div className="w-16 text-right">
                       <p className="text-sm font-semibold text-foreground">
-                        {formatCurrency(item.price * item.quantity)}
+                        {formatCurrency(item.product.sell_price * item.quantity)}
                       </p>
                     </div>
                     <Button

@@ -11,12 +11,14 @@ import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import POS from "./pages/POS";
 import Products from "./pages/Products";
+import Inventory from "./pages/Inventory";
 import Warehouses from "./pages/Warehouses";
 import Transactions from "./pages/Transactions";
 import Expenses from "./pages/Expenses";
 import Reports from "./pages/Reports";
 import Suppliers from "./pages/Suppliers";
 import PurchaseOrders from "./pages/PurchaseOrders";
+import AuditLogs from "./pages/AuditLogs";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
@@ -34,78 +36,19 @@ const App = () => (
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/onboarding" element={<Onboarding />} />
-              <Route
-                path="/"
-                element={
-                  <ProtectedRoute>
-                    <Index />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/pos"
-                element={
-                  <ProtectedRoute>
-                    <POS />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/products"
-                element={
-                  <ProtectedRoute>
-                    <Products />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/warehouses"
-                element={
-                  <ProtectedRoute>
-                    <Warehouses />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/transactions"
-                element={
-                  <ProtectedRoute>
-                    <Transactions />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/expenses"
-                element={
-                  <ProtectedRoute>
-                    <Expenses />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/reports"
-                element={
-                  <ProtectedRoute>
-                    <Reports />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/users"
-                element={
-                  <ProtectedRoute>
-                    <Users />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/settings"
-                element={
-                  <ProtectedRoute>
-                    <Settings />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+              <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+              <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
+              <Route path="/warehouses" element={<ProtectedRoute><Warehouses /></ProtectedRoute>} />
+              <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
+              <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+              <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+              <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
+              <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrders /></ProtectedRoute>} />
+              <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
+              <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
+              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BusinessProvider>

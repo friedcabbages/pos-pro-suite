@@ -152,15 +152,9 @@ export default function Warehouses() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {warehouses?.map((warehouse, index) => {
-              const productCount = warehouse.inventory?.length || 0;
-              const totalValue = warehouse.inventory?.reduce((sum, inv: any) => {
-                const product = inv.products;
-                return sum + (inv.quantity * (product?.cost_price || 0));
-              }, 0) || 0;
-              const lowStockCount = warehouse.inventory?.filter((inv: any) => {
-                const product = inv.products;
-                return inv.quantity <= (product?.min_stock || 0);
-              }).length || 0;
+              const productCount = warehouse.products_count;
+              const totalValue = warehouse.total_value;
+              const lowStockCount = warehouse.low_stock_count;
 
               return (
                 <div

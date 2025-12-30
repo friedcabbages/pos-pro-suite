@@ -124,9 +124,7 @@ export default function PurchaseOrders() {
 
     createPO.mutate({
       supplier_id: formData.supplier_id,
-      branch_id: branch.id,
-      warehouse_id: warehouse.id,
-      notes: formData.notes || null,
+      notes: formData.notes || undefined,
       items: formData.items,
     }, {
       onSuccess: () => {
