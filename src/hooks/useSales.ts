@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusiness } from '@/contexts/BusinessContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { Sale, SaleItem, PaymentMethod, Product } from '@/types/database';
+import { Sale, PaymentMethod, Product } from '@/types/database';
+import { createAuditLog, logInventoryChange } from '@/lib/audit';
 import { toast } from 'sonner';
 
 interface CartItem {
@@ -112,11 +113,10 @@ export function useCreateSale() {
         throw new Error('Business, branch, or warehouse not selected');
       }
 
-      // Generate invoice number
       const timestamp = Date.now().toString(36).toUpperCase();
       const invoice_number = `INV-${timestamp}`;
 
-      // Check stock availability first
+      // Check stock availability
       for (const item of input.items) {
         const { data: inventory } = await supabase
           .from('inventory')
@@ -134,7 +134,7 @@ export function useCreateSale() {
       // Create sale
       const { data: sale, error: saleError } = await supabase
         .from('sales')
-        .insert({
+        .insert([{
           business_id: business.id,
           branch_id: branch.id,
           warehouse_id: warehouse.id,
@@ -146,10 +146,10 @@ export function useCreateSale() {
           payment_method: input.payment_method,
           payment_amount: input.payment_amount,
           change_amount: input.payment_amount - input.total,
-          customer_name: input.customer_name,
-          notes: input.notes,
-          cashier_id: user?.id
-        })
+          customer_name: input.customer_name || null,
+          notes: input.notes || null,
+          cashier_id: user?.id || null
+        }])
         .select()
         .single();
 
@@ -159,8 +159,7 @@ export function useCreateSale() {
       for (const item of input.items) {
         const profit = (item.product.sell_price - item.product.cost_price) * item.quantity;
 
-        // Insert sale item
-        await supabase.from('sale_items').insert({
+        await supabase.from('sale_items').insert([{
           sale_id: sale.id,
           product_id: item.product.id,
           quantity: item.quantity,
@@ -169,9 +168,8 @@ export function useCreateSale() {
           discount_amount: 0,
           total: item.product.sell_price * item.quantity,
           profit
-        });
+        }]);
 
-        // Get current inventory
         const { data: inventory } = await supabase
           .from('inventory')
           .select('id, quantity')
@@ -182,7 +180,6 @@ export function useCreateSale() {
         const currentQty = inventory?.quantity || 0;
         const newQty = currentQty - item.quantity;
 
-        // Update or insert inventory
         if (inventory) {
           await supabase
             .from('inventory')
@@ -190,8 +187,7 @@ export function useCreateSale() {
             .eq('id', inventory.id);
         }
 
-        // Log inventory change
-        await supabase.from('inventory_logs').insert({
+        await logInventoryChange({
           product_id: item.product.id,
           warehouse_id: warehouse.id,
           action: 'sale',
@@ -204,8 +200,7 @@ export function useCreateSale() {
         });
       }
 
-      // Create audit log
-      await supabase.from('audit_logs').insert({
+      await createAuditLog({
         business_id: business.id,
         user_id: user?.id,
         entity_type: 'sale',
