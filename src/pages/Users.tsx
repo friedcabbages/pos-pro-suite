@@ -17,46 +17,24 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { Skeleton } from "@/components/ui/skeleton";
 
-const users = [
-  {
-    id: "1",
-    name: "John Doe",
-    email: "john@velpos.com",
-    role: "owner",
-    status: "active",
-    lastActive: "2 min ago",
-    warehouse: "All",
-  },
-  {
-    id: "2",
-    name: "Jane Smith",
-    email: "jane@velpos.com",
-    role: "admin",
-    status: "active",
-    lastActive: "15 min ago",
-    warehouse: "Main Warehouse",
-  },
-  {
-    id: "3",
-    name: "Mike Johnson",
-    email: "mike@velpos.com",
-    role: "cashier",
-    status: "active",
-    lastActive: "1 hour ago",
-    warehouse: "Branch Store - Surabaya",
-  },
-  {
-    id: "4",
-    name: "Sarah Wilson",
-    email: "sarah@velpos.com",
-    role: "cashier",
-    status: "inactive",
-    lastActive: "3 days ago",
-    warehouse: "Main Warehouse",
-  },
-];
+interface UserWithRole {
+  id: string;
+  user_id: string;
+  role: "owner" | "admin" | "cashier";
+  branch_id: string | null;
+  profile?: {
+    full_name: string | null;
+    phone: string | null;
+  };
+  branch?: {
+    name: string;
+  };
+}
 
 const roleIcons = {
   owner: Shield,
@@ -70,19 +48,64 @@ const roleColors = {
   cashier: "bg-secondary text-secondary-foreground border-border",
 };
 
-const statusColors = {
-  active: "bg-success/10 text-success border-success/30",
-  inactive: "bg-muted text-muted-foreground border-border",
-};
-
 export default function Users() {
   const [search, setSearch] = useState("");
+  const [users, setUsers] = useState<UserWithRole[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { business } = useBusiness();
+
+  useEffect(() => {
+    if (!business?.id) return;
+
+    const fetchUsers = async () => {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from("user_roles")
+        .select(`
+          id,
+          user_id,
+          role,
+          branch_id
+        `)
+        .eq("business_id", business.id);
+
+      if (data) {
+        // Fetch profiles for each user
+        const userIds = data.map(u => u.user_id);
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name, phone")
+          .in("id", userIds);
+
+        // Fetch branches
+        const branchIds = data.filter(u => u.branch_id).map(u => u.branch_id!);
+        const { data: branches } = await supabase
+          .from("branches")
+          .select("id, name")
+          .in("id", branchIds);
+
+        const usersWithData = data.map(user => ({
+          ...user,
+          profile: profiles?.find(p => p.id === user.user_id),
+          branch: branches?.find(b => b.id === user.branch_id),
+        }));
+
+        setUsers(usersWithData);
+      }
+      setIsLoading(false);
+    };
+
+    fetchUsers();
+  }, [business?.id]);
 
   const filteredUsers = users.filter(
     (user) =>
-      user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.email.toLowerCase().includes(search.toLowerCase())
+      (user.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ?? false)
   );
+
+  const ownerCount = users.filter(u => u.role === "owner").length;
+  const adminCount = users.filter(u => u.role === "admin").length;
+  const cashierCount = users.filter(u => u.role === "cashier").length;
 
   return (
     <DashboardLayout>
@@ -99,7 +122,7 @@ export default function Users() {
           </div>
           <Button variant="glow">
             <Plus className="mr-2 h-4 w-4" />
-            Add User
+            Invite User
           </Button>
         </div>
 
@@ -111,7 +134,7 @@ export default function Users() {
                 <Shield className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">1</p>
+                <p className="text-2xl font-bold text-foreground">{ownerCount}</p>
                 <p className="text-sm text-muted-foreground">Owner</p>
               </div>
             </div>
@@ -122,7 +145,7 @@ export default function Users() {
                 <UserCog className="h-5 w-5 text-warning" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">1</p>
+                <p className="text-2xl font-bold text-foreground">{adminCount}</p>
                 <p className="text-sm text-muted-foreground">Admins</p>
               </div>
             </div>
@@ -133,7 +156,7 @@ export default function Users() {
                 <User className="h-5 w-5 text-secondary-foreground" />
               </div>
               <div>
-                <p className="text-2xl font-bold text-foreground">2</p>
+                <p className="text-2xl font-bold text-foreground">{cashierCount}</p>
                 <p className="text-sm text-muted-foreground">Cashiers</p>
               </div>
             </div>
@@ -156,84 +179,93 @@ export default function Users() {
 
         {/* Users Table */}
         <div className="rounded-xl border border-border bg-card shadow-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Warehouse</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Active</TableHead>
-                <TableHead className="w-12"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredUsers.map((user) => {
-                const RoleIcon = roleIcons[user.role as keyof typeof roleIcons];
-                return (
-                  <TableRow key={user.id} className="group">
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
-                          {user.name
-                            .split(" ")
-                            .map((n) => n[0])
-                            .join("")}
-                        </div>
-                        <div>
-                          <p className="font-medium text-foreground">{user.name}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={roleColors[user.role as keyof typeof roleColors]}
-                      >
-                        <RoleIcon className="mr-1 h-3 w-3" />
-                        {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {user.warehouse}
-                    </TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="outline"
-                        className={statusColors[user.status as keyof typeof statusColors]}
-                      >
-                        {user.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {user.lastActive}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="opacity-0 group-hover:opacity-100"
-                          >
-                            <MoreHorizontal className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Edit User</DropdownMenuItem>
-                          <DropdownMenuItem>Reset Password</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">
-                            Deactivate
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+          {isLoading ? (
+            <div className="p-6 space-y-4">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>User</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Branch</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No users found
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                ) : (
+                  filteredUsers.map((user) => {
+                    const RoleIcon = roleIcons[user.role];
+                    return (
+                      <TableRow key={user.id} className="group">
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-secondary text-sm font-semibold text-secondary-foreground">
+                              {user.profile?.full_name
+                                ?.split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .substring(0, 2)
+                                .toUpperCase() || "??"}
+                            </div>
+                            <div>
+                              <p className="font-medium text-foreground">
+                                {user.profile?.full_name || "Unknown"}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {user.profile?.phone || "No phone"}
+                              </p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={roleColors[user.role]}
+                          >
+                            <RoleIcon className="mr-1 h-3 w-3" />
+                            {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {user.branch?.name || "All Branches"}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="opacity-0 group-hover:opacity-100"
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>Edit Role</DropdownMenuItem>
+                              <DropdownMenuItem>Change Branch</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive">
+                                Remove Access
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          )}
         </div>
       </div>
     </DashboardLayout>

@@ -13,73 +13,92 @@ import {
   QrCode,
   Receipt,
   X,
+  Loader2,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useProducts } from "@/hooks/useProducts";
+import { useCategories } from "@/hooks/useCategories";
+import { useSales } from "@/hooks/useSales";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { useToast } from "@/hooks/use-toast";
+import { Skeleton } from "@/components/ui/skeleton";
 
-interface Product {
+interface CartItem {
   id: string;
   name: string;
   price: number;
-  category: string;
-  stock: number;
-  image?: string;
-}
-
-interface CartItem extends Product {
+  cost_price: number;
   quantity: number;
+  stock: number;
+  product_id: string;
 }
-
-const sampleProducts: Product[] = [
-  { id: "1", name: "Espresso", price: 3.5, category: "Beverages", stock: 100 },
-  { id: "2", name: "Cappuccino", price: 4.5, category: "Beverages", stock: 100 },
-  { id: "3", name: "Latte", price: 5.0, category: "Beverages", stock: 100 },
-  { id: "4", name: "Croissant", price: 3.0, category: "Pastry", stock: 25 },
-  { id: "5", name: "Blueberry Muffin", price: 3.5, category: "Pastry", stock: 18 },
-  { id: "6", name: "Bagel", price: 2.5, category: "Pastry", stock: 30 },
-  { id: "7", name: "Sandwich Club", price: 8.5, category: "Food", stock: 15 },
-  { id: "8", name: "Caesar Salad", price: 9.0, category: "Food", stock: 12 },
-  { id: "9", name: "Organic Fertilizer", price: 25.0, category: "Agriculture", stock: 50 },
-  { id: "10", name: "Rice 25kg", price: 28.0, category: "Wholesale", stock: 100 },
-  { id: "11", name: "Sugar 1kg", price: 1.5, category: "Wholesale", stock: 200 },
-  { id: "12", name: "Flour 5kg", price: 6.0, category: "Wholesale", stock: 80 },
-];
-
-const categories = ["All", "Beverages", "Pastry", "Food", "Agriculture", "Wholesale"];
 
 export default function POS() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [discount, setDiscount] = useState(0);
+  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "qris" | "transfer">("cash");
+  const [customerName, setCustomerName] = useState("");
 
-  const filteredProducts = sampleProducts.filter((product) => {
+  const { products, isLoading: productsLoading } = useProducts();
+  const { categories } = useCategories();
+  const { createSale } = useSales();
+  const { business, branch, warehouse } = useBusiness();
+  const { toast } = useToast();
+
+  const allCategories = ["All", ...(categories?.map(c => c.name) || [])];
+
+  const filteredProducts = products?.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(search.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+    const matchesCategory = selectedCategory === "All" || 
+      categories?.find(c => c.id === product.category_id)?.name === selectedCategory;
+    return matchesSearch && matchesCategory && product.is_active;
+  }) || [];
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: any) => {
+    const stock = product.inventory?.[0]?.quantity || 0;
+    
     setCart((prev) => {
-      const existing = prev.find((item) => item.id === product.id);
+      const existing = prev.find((item) => item.product_id === product.id);
       if (existing) {
+        if (existing.quantity >= stock) {
+          toast({ title: "Not enough stock", variant: "destructive" });
+          return prev;
+        }
         return prev.map((item) =>
-          item.id === product.id
+          item.product_id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      if (stock <= 0) {
+        toast({ title: "Out of stock", variant: "destructive" });
+        return prev;
+      }
+      return [...prev, {
+        id: crypto.randomUUID(),
+        product_id: product.id,
+        name: product.name,
+        price: product.sell_price,
+        cost_price: product.cost_price,
+        quantity: 1,
+        stock,
+      }];
     });
   };
 
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) =>
       prev
-        .map((item) =>
-          item.id === id
-            ? { ...item, quantity: Math.max(0, item.quantity + delta) }
-            : item
-        )
+        .map((item) => {
+          if (item.id !== id) return item;
+          const newQty = Math.max(0, item.quantity + delta);
+          if (newQty > item.stock) {
+            toast({ title: "Not enough stock", variant: "destructive" });
+            return item;
+          }
+          return { ...item, quantity: newQty };
+        })
         .filter((item) => item.quantity > 0)
     );
   };
@@ -91,12 +110,73 @@ export default function POS() {
   const clearCart = () => {
     setCart([]);
     setDiscount(0);
+    setCustomerName("");
   };
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const discountAmount = (subtotal * discount) / 100;
   const total = subtotal - discountAmount;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  const handleCheckout = async (method: "cash" | "card" | "qris" | "transfer") => {
+    if (!branch || !warehouse) {
+      toast({ title: "Please select a branch and warehouse", variant: "destructive" });
+      return;
+    }
+    
+    if (cart.length === 0) {
+      toast({ title: "Cart is empty", variant: "destructive" });
+      return;
+    }
+
+    const saleData = {
+      branch_id: branch.id,
+      warehouse_id: warehouse.id,
+      subtotal,
+      discount_amount: discountAmount,
+      total,
+      payment_method: method,
+      payment_amount: total,
+      customer_name: customerName || null,
+      items: cart.map((item) => ({
+        product_id: item.product_id,
+        quantity: item.quantity,
+        sell_price: item.price,
+        cost_price: item.cost_price,
+        discount_amount: 0,
+        total: item.price * item.quantity,
+        profit: (item.price - item.cost_price) * item.quantity,
+      })),
+    };
+
+    createSale.mutate(saleData, {
+      onSuccess: () => {
+        toast({ title: "Sale completed successfully!" });
+        clearCart();
+      },
+      onError: (error: any) => {
+        toast({ title: "Sale failed", description: error.message, variant: "destructive" });
+      },
+    });
+  };
+
+  const getCategoryIcon = (categoryName: string) => {
+    const name = categoryName.toLowerCase();
+    if (name.includes("beverage") || name.includes("drink") || name === "all") return "☕";
+    if (name.includes("pastry") || name.includes("bake")) return "🥐";
+    if (name.includes("food")) return "🥗";
+    if (name.includes("agri") || name.includes("farm")) return "🌱";
+    return "📦";
+  };
+
+  const formatCurrency = (value: number) => {
+    const currency = business?.currency || 'USD';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+    }).format(value);
+  };
 
   return (
     <DashboardLayout>
@@ -116,7 +196,7 @@ export default function POS() {
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              {categories.map((category) => (
+              {allCategories.map((category) => (
                 <Button
                   key={category}
                   variant={selectedCategory === category ? "default" : "secondary"}
@@ -131,36 +211,45 @@ export default function POS() {
 
           {/* Products Grid */}
           <div className="flex-1 overflow-y-auto">
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-              {filteredProducts.map((product) => (
-                <button
-                  key={product.id}
-                  onClick={() => addToCart(product)}
-                  className="group rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-lg active:scale-[0.98]"
-                >
-                  <div className="mb-3 flex h-16 w-full items-center justify-center rounded-lg bg-secondary">
-                    <span className="text-2xl">
-                      {product.category === "Beverages" && "☕"}
-                      {product.category === "Pastry" && "🥐"}
-                      {product.category === "Food" && "🥗"}
-                      {product.category === "Agriculture" && "🌱"}
-                      {product.category === "Wholesale" && "📦"}
-                    </span>
-                  </div>
-                  <h4 className="truncate text-sm font-medium text-foreground">
-                    {product.name}
-                  </h4>
-                  <div className="mt-1 flex items-center justify-between">
-                    <span className="text-lg font-bold text-primary">
-                      ${product.price.toFixed(2)}
-                    </span>
-                    <Badge variant="secondary" className="text-xs">
-                      {product.stock}
-                    </Badge>
-                  </div>
-                </button>
-              ))}
-            </div>
+            {productsLoading ? (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {[...Array(10)].map((_, i) => (
+                  <Skeleton key={i} className="h-32 rounded-xl" />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                {filteredProducts.map((product) => {
+                  const stock = product.inventory?.[0]?.quantity || 0;
+                  const category = categories?.find(c => c.id === product.category_id);
+                  return (
+                    <button
+                      key={product.id}
+                      onClick={() => addToCart(product)}
+                      disabled={stock <= 0}
+                      className="group rounded-xl border border-border bg-card p-4 text-left transition-all hover:border-primary hover:shadow-lg active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="mb-3 flex h-16 w-full items-center justify-center rounded-lg bg-secondary">
+                        <span className="text-2xl">
+                          {getCategoryIcon(category?.name || "")}
+                        </span>
+                      </div>
+                      <h4 className="truncate text-sm font-medium text-foreground">
+                        {product.name}
+                      </h4>
+                      <div className="mt-1 flex items-center justify-between">
+                        <span className="text-lg font-bold text-primary">
+                          {formatCurrency(product.sell_price)}
+                        </span>
+                        <Badge variant={stock > 0 ? "secondary" : "destructive"} className="text-xs">
+                          {stock}
+                        </Badge>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
@@ -178,6 +267,15 @@ export default function POS() {
                 Clear
               </Button>
             )}
+          </div>
+
+          {/* Customer Name */}
+          <div className="border-b border-border p-4">
+            <Input
+              placeholder="Customer name (optional)"
+              value={customerName}
+              onChange={(e) => setCustomerName(e.target.value)}
+            />
           </div>
 
           {/* Cart Items */}
@@ -202,7 +300,7 @@ export default function POS() {
                         {item.name}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        ${item.price.toFixed(2)} each
+                        {formatCurrency(item.price)} each
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -228,7 +326,7 @@ export default function POS() {
                     </div>
                     <div className="w-16 text-right">
                       <p className="text-sm font-semibold text-foreground">
-                        ${(item.price * item.quantity).toFixed(2)}
+                        {formatCurrency(item.price * item.quantity)}
                       </p>
                     </div>
                     <Button
@@ -264,31 +362,46 @@ export default function POS() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-muted-foreground">
                 <span>Subtotal</span>
-                <span>${subtotal.toFixed(2)}</span>
+                <span>{formatCurrency(subtotal)}</span>
               </div>
               {discount > 0 && (
                 <div className="flex justify-between text-success">
                   <span>Discount ({discount}%)</span>
-                  <span>-${discountAmount.toFixed(2)}</span>
+                  <span>-{formatCurrency(discountAmount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-lg font-bold text-foreground">
                 <span>Total</span>
-                <span>${total.toFixed(2)}</span>
+                <span>{formatCurrency(total)}</span>
               </div>
             </div>
 
             {/* Payment Buttons */}
             <div className="grid grid-cols-3 gap-2">
-              <Button variant="outline" className="flex-col h-16" disabled={cart.length === 0}>
+              <Button 
+                variant="outline" 
+                className="flex-col h-16" 
+                disabled={cart.length === 0 || createSale.isPending}
+                onClick={() => handleCheckout("cash")}
+              >
                 <Banknote className="mb-1 h-5 w-5" />
                 <span className="text-xs">Cash</span>
               </Button>
-              <Button variant="outline" className="flex-col h-16" disabled={cart.length === 0}>
+              <Button 
+                variant="outline" 
+                className="flex-col h-16" 
+                disabled={cart.length === 0 || createSale.isPending}
+                onClick={() => handleCheckout("card")}
+              >
                 <CreditCard className="mb-1 h-5 w-5" />
                 <span className="text-xs">Card</span>
               </Button>
-              <Button variant="outline" className="flex-col h-16" disabled={cart.length === 0}>
+              <Button 
+                variant="outline" 
+                className="flex-col h-16" 
+                disabled={cart.length === 0 || createSale.isPending}
+                onClick={() => handleCheckout("qris")}
+              >
                 <QrCode className="mb-1 h-5 w-5" />
                 <span className="text-xs">QRIS</span>
               </Button>
@@ -297,9 +410,14 @@ export default function POS() {
             <Button 
               variant="glow" 
               className="w-full h-12 text-base" 
-              disabled={cart.length === 0}
+              disabled={cart.length === 0 || createSale.isPending}
+              onClick={() => handleCheckout("cash")}
             >
-              <Receipt className="mr-2 h-5 w-5" />
+              {createSale.isPending ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <Receipt className="mr-2 h-5 w-5" />
+              )}
               Complete Sale
             </Button>
           </div>
