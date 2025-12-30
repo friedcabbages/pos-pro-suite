@@ -14,16 +14,1179 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      audit_logs: {
+        Row: {
+          action: string
+          business_id: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          new_value: Json | null
+          old_value: Json | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          business_id: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          new_value?: Json | null
+          old_value?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          business_id?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          new_value?: Json | null
+          old_value?: Json | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      branches: {
+        Row: {
+          address: string | null
+          business_id: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          name: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          business_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          business_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "branches_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      businesses: {
+        Row: {
+          address: string | null
+          created_at: string
+          currency: string
+          email: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          phone: string | null
+          tax_rate: number | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          currency?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          phone?: string | null
+          tax_rate?: number | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          currency?: string
+          email?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          phone?: string | null
+          tax_rate?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          business_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount: number
+          branch_id: string | null
+          business_id: string
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          expense_date: string
+          id: string
+          is_fixed: boolean | null
+          receipt_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          branch_id?: string | null
+          business_id: string
+          category: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_date?: string
+          id?: string
+          is_fixed?: boolean | null
+          receipt_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          branch_id?: string | null
+          business_id?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          expense_date?: string
+          id?: string
+          is_fixed?: boolean | null
+          receipt_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "expenses_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory: {
+        Row: {
+          batch_number: string | null
+          created_at: string
+          expiry_date: string | null
+          id: string
+          product_id: string
+          quantity: number
+          updated_at: string
+          warehouse_id: string
+        }
+        Insert: {
+          batch_number?: string | null
+          created_at?: string
+          expiry_date?: string | null
+          id?: string
+          product_id: string
+          quantity?: number
+          updated_at?: string
+          warehouse_id: string
+        }
+        Update: {
+          batch_number?: string | null
+          created_at?: string
+          expiry_date?: string | null
+          id?: string
+          product_id?: string
+          quantity?: number
+          updated_at?: string
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "inventory_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_margins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["warehouse_id"]
+          },
+          {
+            foreignKeyName: "inventory_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_logs: {
+        Row: {
+          action: Database["public"]["Enums"]["inventory_action"]
+          created_at: string
+          id: string
+          notes: string | null
+          product_id: string
+          quantity_after: number
+          quantity_before: number
+          quantity_change: number
+          reference_id: string | null
+          reference_type: string | null
+          user_id: string | null
+          warehouse_id: string
+        }
+        Insert: {
+          action: Database["public"]["Enums"]["inventory_action"]
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id: string
+          quantity_after: number
+          quantity_before: number
+          quantity_change: number
+          reference_id?: string | null
+          reference_type?: string | null
+          user_id?: string | null
+          warehouse_id: string
+        }
+        Update: {
+          action?: Database["public"]["Enums"]["inventory_action"]
+          created_at?: string
+          id?: string
+          notes?: string | null
+          product_id?: string
+          quantity_after?: number
+          quantity_before?: number
+          quantity_change?: number
+          reference_id?: string | null
+          reference_type?: string | null
+          user_id?: string | null
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "inventory_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_margins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inventory_logs_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["warehouse_id"]
+          },
+          {
+            foreignKeyName: "inventory_logs_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          barcode: string | null
+          business_id: string
+          category_id: string | null
+          cost_price: number
+          created_at: string
+          description: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          market_price: number | null
+          min_stock: number | null
+          name: string
+          sell_price: number
+          sku: string | null
+          track_expiry: boolean | null
+          unit: string | null
+          updated_at: string
+        }
+        Insert: {
+          barcode?: string | null
+          business_id: string
+          category_id?: string | null
+          cost_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          market_price?: number | null
+          min_stock?: number | null
+          name: string
+          sell_price?: number
+          sku?: string | null
+          track_expiry?: boolean | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string | null
+          business_id?: string
+          category_id?: string | null
+          cost_price?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          market_price?: number | null
+          min_stock?: number | null
+          name?: string
+          sell_price?: number
+          sku?: string | null
+          track_expiry?: boolean | null
+          unit?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "products_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          branch_id: string | null
+          business_id: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          branch_id?: string | null
+          business_id?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          branch_id?: string | null
+          business_id?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "profiles_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_order_items: {
+        Row: {
+          cost_price: number
+          created_at: string
+          id: string
+          product_id: string
+          purchase_order_id: string
+          quantity: number
+          received_quantity: number | null
+          total_cost: number
+        }
+        Insert: {
+          cost_price: number
+          created_at?: string
+          id?: string
+          product_id: string
+          purchase_order_id: string
+          quantity: number
+          received_quantity?: number | null
+          total_cost: number
+        }
+        Update: {
+          cost_price?: number
+          created_at?: string
+          id?: string
+          product_id?: string
+          purchase_order_id?: string
+          quantity?: number
+          received_quantity?: number | null
+          total_cost?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_margins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_order_items_purchase_order_id_fkey"
+            columns: ["purchase_order_id"]
+            isOneToOne: false
+            referencedRelation: "purchase_orders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchase_orders: {
+        Row: {
+          branch_id: string
+          business_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          ordered_at: string | null
+          po_number: string
+          received_at: string | null
+          received_by: string | null
+          status: Database["public"]["Enums"]["po_status"]
+          supplier_id: string
+          total_cost: number
+          updated_at: string
+          warehouse_id: string
+        }
+        Insert: {
+          branch_id: string
+          business_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          ordered_at?: string | null
+          po_number: string
+          received_at?: string | null
+          received_by?: string | null
+          status?: Database["public"]["Enums"]["po_status"]
+          supplier_id: string
+          total_cost?: number
+          updated_at?: string
+          warehouse_id: string
+        }
+        Update: {
+          branch_id?: string
+          business_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          ordered_at?: string | null
+          po_number?: string
+          received_at?: string | null
+          received_by?: string | null
+          status?: Database["public"]["Enums"]["po_status"]
+          supplier_id?: string
+          total_cost?: number
+          updated_at?: string
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_orders_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "v_supplier_performance"
+            referencedColumns: ["supplier_id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["warehouse_id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sale_items: {
+        Row: {
+          cost_price: number
+          created_at: string
+          discount_amount: number | null
+          id: string
+          product_id: string
+          profit: number
+          quantity: number
+          sale_id: string
+          sell_price: number
+          total: number
+        }
+        Insert: {
+          cost_price: number
+          created_at?: string
+          discount_amount?: number | null
+          id?: string
+          product_id: string
+          profit: number
+          quantity: number
+          sale_id: string
+          sell_price: number
+          total: number
+        }
+        Update: {
+          cost_price?: number
+          created_at?: string
+          discount_amount?: number | null
+          id?: string
+          product_id?: string
+          profit?: number
+          quantity?: number
+          sale_id?: string
+          sell_price?: number
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["product_id"]
+          },
+          {
+            foreignKeyName: "sale_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "v_product_margins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_items_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales: {
+        Row: {
+          branch_id: string
+          business_id: string
+          cashier_id: string | null
+          change_amount: number | null
+          created_at: string
+          customer_name: string | null
+          discount_amount: number | null
+          id: string
+          invoice_number: string
+          notes: string | null
+          payment_amount: number
+          payment_method: Database["public"]["Enums"]["payment_method"]
+          subtotal: number
+          tax_amount: number | null
+          total: number
+          warehouse_id: string
+        }
+        Insert: {
+          branch_id: string
+          business_id: string
+          cashier_id?: string | null
+          change_amount?: number | null
+          created_at?: string
+          customer_name?: string | null
+          discount_amount?: number | null
+          id?: string
+          invoice_number: string
+          notes?: string | null
+          payment_amount?: number
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          subtotal?: number
+          tax_amount?: number | null
+          total?: number
+          warehouse_id: string
+        }
+        Update: {
+          branch_id?: string
+          business_id?: string
+          cashier_id?: string | null
+          change_amount?: number | null
+          created_at?: string
+          customer_name?: string | null
+          discount_amount?: number | null
+          id?: string
+          invoice_number?: string
+          notes?: string | null
+          payment_amount?: number
+          payment_method?: Database["public"]["Enums"]["payment_method"]
+          subtotal?: number
+          tax_amount?: number | null
+          total?: number
+          warehouse_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "sales_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["warehouse_id"]
+          },
+          {
+            foreignKeyName: "sales_warehouse_id_fkey"
+            columns: ["warehouse_id"]
+            isOneToOne: false
+            referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          business_id: string
+          created_at: string
+          default_tax_rate: number | null
+          enable_expenses: boolean | null
+          enable_expiry_tracking: boolean | null
+          enable_multi_warehouse: boolean | null
+          enable_tax: boolean | null
+          id: string
+          receipt_footer: string | null
+          receipt_header: string | null
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          default_tax_rate?: number | null
+          enable_expenses?: boolean | null
+          enable_expiry_tracking?: boolean | null
+          enable_multi_warehouse?: boolean | null
+          enable_tax?: boolean | null
+          id?: string
+          receipt_footer?: string | null
+          receipt_header?: string | null
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          default_tax_rate?: number | null
+          enable_expenses?: boolean | null
+          enable_expiry_tracking?: boolean | null
+          enable_multi_warehouse?: boolean | null
+          enable_tax?: boolean | null
+          id?: string
+          receipt_footer?: string | null
+          receipt_header?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "settings_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      suppliers: {
+        Row: {
+          address: string | null
+          business_id: string
+          contact_person: string | null
+          created_at: string
+          email: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          notes: string | null
+          phone: string | null
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          business_id: string
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          business_id?: string
+          contact_person?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          branch_id: string | null
+          business_id: string
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          branch_id?: string | null
+          business_id: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          branch_id?: string | null
+          business_id?: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_roles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_roles_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "user_roles_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      warehouses: {
+        Row: {
+          address: string | null
+          branch_id: string
+          created_at: string
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          branch_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          branch_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "warehouses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "warehouses_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["branch_id"]
+          },
+        ]
+      }
     }
     Views: {
-      [_ in never]: never
+      v_daily_sales: {
+        Row: {
+          branch_id: string | null
+          business_id: string | null
+          sale_date: string | null
+          total_cogs: number | null
+          total_discounts: number | null
+          total_profit: number | null
+          total_revenue: number | null
+          total_tax: number | null
+          total_transactions: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "v_low_stock"
+            referencedColumns: ["branch_id"]
+          },
+          {
+            foreignKeyName: "sales_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_low_stock: {
+        Row: {
+          branch_id: string | null
+          branch_name: string | null
+          business_id: string | null
+          current_stock: number | null
+          min_stock: number | null
+          product_id: string | null
+          product_name: string | null
+          sku: string | null
+          stock_deficit: number | null
+          warehouse_id: string | null
+          warehouse_name: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_product_margins: {
+        Row: {
+          business_id: string | null
+          cost_price: number | null
+          id: string | null
+          margin_percentage: number | null
+          market_price: number | null
+          name: string | null
+          profit_per_unit: number | null
+          sell_price: number | null
+          sku: string | null
+          stock_value: number | null
+          total_stock: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      v_supplier_performance: {
+        Row: {
+          business_id: string | null
+          completed_orders: number | null
+          supplier_id: string | null
+          supplier_name: string | null
+          total_orders: number | null
+          total_value: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      [_ in never]: never
+      get_user_business_id: { Args: never; Returns: string }
+      has_branch_access: {
+        Args: { _branch_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_business_access: {
+        Args: { _business_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      is_admin_or_owner: {
+        Args: { _business_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_owner: {
+        Args: { _business_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "owner" | "admin" | "cashier"
+      inventory_action:
+        | "stock_in"
+        | "stock_out"
+        | "adjustment"
+        | "transfer"
+        | "po_receive"
+        | "sale"
+      payment_method: "cash" | "transfer" | "qris" | "card" | "other"
+      po_status: "draft" | "ordered" | "received" | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +1313,18 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["owner", "admin", "cashier"],
+      inventory_action: [
+        "stock_in",
+        "stock_out",
+        "adjustment",
+        "transfer",
+        "po_receive",
+        "sale",
+      ],
+      payment_method: ["cash", "transfer", "qris", "card", "other"],
+      po_status: ["draft", "ordered", "received", "cancelled"],
+    },
   },
 } as const
