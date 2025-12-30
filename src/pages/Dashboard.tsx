@@ -4,7 +4,7 @@ import { SalesChart } from "@/components/dashboard/SalesChart";
 import { TopProducts } from "@/components/dashboard/TopProducts";
 import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { LowStockAlert } from "@/components/dashboard/LowStockAlert";
-import { useDashboard } from "@/hooks/useDashboard";
+import { useDashboardStats, useLowStockProducts } from "@/hooks/useDashboard";
 import { useBusiness } from "@/contexts/BusinessContext";
 import {
   DollarSign,
@@ -16,19 +16,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export default function Dashboard() {
   const { business } = useBusiness();
-  const { dailySales, lowStock, productMargins, isLoading } = useDashboard();
-
-  // Calculate KPIs from daily sales
-  const todaySales = dailySales?.[0]?.total_revenue || 0;
-  const todayTransactions = dailySales?.[0]?.total_transactions || 0;
-  const monthlyRevenue = dailySales?.reduce((sum, d) => sum + (d.total_revenue || 0), 0) || 0;
-  const totalProducts = productMargins?.length || 0;
-
-  // Calculate change percentages (simplified - compare to previous period)
-  const yesterdaySales = dailySales?.[1]?.total_revenue || 0;
-  const salesChange = yesterdaySales > 0 
-    ? ((todaySales - yesterdaySales) / yesterdaySales) * 100 
-    : 0;
+  const { data: stats, isLoading } = useDashboardStats();
+  const { data: lowStock } = useLowStockProducts();
 
   const formatCurrency = (value: number) => {
     const currency = business?.currency || 'USD';
@@ -65,16 +54,16 @@ export default function Dashboard() {
             <>
               <KPICard
                 title="Today's Sales"
-                value={formatCurrency(todaySales)}
-                change={salesChange}
-                changeLabel="vs yesterday"
+                value={formatCurrency(stats?.todaySales || 0)}
+                change={0}
+                changeLabel="today's revenue"
                 icon={DollarSign}
                 variant="success"
                 delay={0}
               />
               <KPICard
                 title="Monthly Revenue"
-                value={formatCurrency(monthlyRevenue)}
+                value={formatCurrency(stats?.monthlyRevenue || 0)}
                 change={8.2}
                 changeLabel="vs last month"
                 icon={TrendingUp}
@@ -82,7 +71,7 @@ export default function Dashboard() {
               />
               <KPICard
                 title="Today's Orders"
-                value={todayTransactions.toString()}
+                value={(stats?.totalOrders || 0).toString()}
                 change={0}
                 changeLabel="transactions"
                 icon={ShoppingCart}
@@ -90,7 +79,7 @@ export default function Dashboard() {
               />
               <KPICard
                 title="Products"
-                value={totalProducts.toString()}
+                value={(stats?.totalProducts || 0).toString()}
                 change={lowStock?.length || 0}
                 changeLabel="low stock"
                 icon={Package}

@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useProducts } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
-import { useSales } from "@/hooks/useSales";
+import { useCreateSale } from "@/hooks/useSales";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -37,12 +37,11 @@ export default function POS() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [discount, setDiscount] = useState(0);
-  const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "qris" | "transfer">("cash");
   const [customerName, setCustomerName] = useState("");
 
-  const { products, isLoading: productsLoading } = useProducts();
-  const { categories } = useCategories();
-  const { createSale } = useSales();
+  const { data: products, isLoading: productsLoading } = useProducts();
+  const { data: categories } = useCategories();
+  const createSale = useCreateSale();
   const { business, branch, warehouse } = useBusiness();
   const { toast } = useToast();
 

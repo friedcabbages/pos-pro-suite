@@ -20,10 +20,9 @@ import {
   Cell,
 } from "recharts";
 import { Download, TrendingUp, DollarSign, Receipt, Package } from "lucide-react";
-import { useDashboard } from "@/hooks/useDashboard";
+import { useSalesChart, useTopProducts, useDashboardStats } from "@/hooks/useDashboard";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
 
 const categoryColors = [
   "hsl(160 84% 45%)",
@@ -34,8 +33,12 @@ const categoryColors = [
 ];
 
 export default function Reports() {
-  const { dailySales, productMargins, isLoading } = useDashboard();
+  const { data: salesChart, isLoading: chartLoading } = useSalesChart();
+  const { data: topProducts, isLoading: productsLoading } = useTopProducts();
+  const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { business } = useBusiness();
+
+  const isLoading = chartLoading || productsLoading || statsLoading;
 
   const formatCurrency = (value: number) => {
     const currency = business?.currency || 'USD';
@@ -46,27 +49,14 @@ export default function Reports() {
     }).format(value);
   };
 
-  // Transform daily sales for chart
-  const salesData = dailySales?.slice(0, 7).reverse().map(d => ({
-    date: format(new Date(d.sale_date!), "MMM d"),
-    sales: d.total_revenue || 0,
-    profit: d.total_profit || 0,
-  })) || [];
-
-  // Calculate totals
-  const totalRevenue = dailySales?.reduce((sum, d) => sum + (d.total_revenue || 0), 0) || 0;
-  const totalProfit = dailySales?.reduce((sum, d) => sum + (d.total_profit || 0), 0) || 0;
-  const totalOrders = dailySales?.reduce((sum, d) => sum + (d.total_transactions || 0), 0) || 0;
-  const totalCogs = dailySales?.reduce((sum, d) => sum + (d.total_cogs || 0), 0) || 0;
-
   // Get top products for pie chart
-  const topProducts = productMargins?.slice(0, 5).map((p, i) => ({
+  const pieData = topProducts?.slice(0, 5).map((p, i) => ({
     name: p.name,
-    value: p.stock_value || 0,
+    value: p.revenue || 0,
     color: categoryColors[i % categoryColors.length],
   })) || [];
 
-  const totalStockValue = topProducts.reduce((sum, p) => sum + p.value, 0);
+  const totalRevenue = pieData.reduce((sum, p) => sum + p.value, 0);
 
   return (
     <DashboardLayout>
@@ -114,8 +104,8 @@ export default function Reports() {
                     <DollarSign className="h-6 w-6 text-primary" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Revenue</p>
-                    <p className="text-2xl font-bold text-foreground">{formatCurrency(totalRevenue)}</p>
+                    <p className="text-sm text-muted-foreground">Monthly Revenue</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.monthlyRevenue || 0)}</p>
                   </div>
                 </div>
               </div>
@@ -125,11 +115,8 @@ export default function Reports() {
                     <TrendingUp className="h-6 w-6 text-success" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Gross Profit</p>
-                    <p className="text-2xl font-bold text-foreground">{formatCurrency(totalProfit)}</p>
-                    <p className="text-xs text-success">
-                      {totalRevenue > 0 ? ((totalProfit / totalRevenue) * 100).toFixed(1) : 0}% margin
-                    </p>
+                    <p className="text-sm text-muted-foreground">Monthly Profit</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.monthlyProfit || 0)}</p>
                   </div>
                 </div>
               </div>
@@ -139,8 +126,8 @@ export default function Reports() {
                     <Receipt className="h-6 w-6 text-warning" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">Total Orders</p>
-                    <p className="text-2xl font-bold text-foreground">{totalOrders}</p>
+                    <p className="text-sm text-muted-foreground">Today's Sales</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.todaySales || 0)}</p>
                   </div>
                 </div>
               </div>
@@ -150,11 +137,8 @@ export default function Reports() {
                     <Package className="h-6 w-6 text-destructive" />
                   </div>
                   <div>
-                    <p className="text-sm text-muted-foreground">COGS</p>
-                    <p className="text-2xl font-bold text-foreground">{formatCurrency(totalCogs)}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {totalRevenue > 0 ? ((totalCogs / totalRevenue) * 100).toFixed(1) : 0}% of revenue
-                    </p>
+                    <p className="text-sm text-muted-foreground">Today's Profit</p>
+                    <p className="text-2xl font-bold text-foreground">{formatCurrency(stats?.todayProfit || 0)}</p>
                   </div>
                 </div>
               </div>
@@ -167,18 +151,18 @@ export default function Reports() {
           {/* Bar Chart */}
           <div className="lg:col-span-2 rounded-xl border border-border bg-card p-6 shadow-card">
             <h3 className="mb-6 text-lg font-semibold text-foreground">
-              Sales vs Profit Trend
+              Sales Trend (Last 7 Days)
             </h3>
-            {isLoading ? (
+            {chartLoading ? (
               <Skeleton className="h-[300px] w-full" />
-            ) : salesData.length === 0 ? (
+            ) : !salesChart || salesChart.length === 0 ? (
               <div className="flex h-[300px] items-center justify-center text-muted-foreground">
                 No sales data available
               </div>
             ) : (
               <div className="h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={salesData}>
+                  <BarChart data={salesChart}>
                     <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                     <XAxis
                       dataKey="date"
@@ -196,10 +180,9 @@ export default function Reports() {
                         border: "1px solid hsl(var(--border))",
                         borderRadius: "8px",
                       }}
-                      formatter={(value: number) => [formatCurrency(value), ""]}
+                      formatter={(value: number) => [formatCurrency(value), "Sales"]}
                     />
                     <Bar dataKey="sales" fill="hsl(160 84% 45%)" radius={[4, 4, 0, 0]} name="Sales" />
-                    <Bar dataKey="profit" fill="hsl(142 76% 45%)" radius={[4, 4, 0, 0]} name="Profit" />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -209,11 +192,11 @@ export default function Reports() {
           {/* Pie Chart */}
           <div className="rounded-xl border border-border bg-card p-6 shadow-card">
             <h3 className="mb-6 text-lg font-semibold text-foreground">
-              Top Products by Value
+              Top Products by Revenue
             </h3>
-            {isLoading ? (
+            {productsLoading ? (
               <Skeleton className="h-[200px] w-full" />
-            ) : topProducts.length === 0 ? (
+            ) : pieData.length === 0 ? (
               <div className="flex h-[200px] items-center justify-center text-muted-foreground">
                 No product data
               </div>
@@ -223,7 +206,7 @@ export default function Reports() {
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={topProducts}
+                        data={pieData}
                         cx="50%"
                         cy="50%"
                         innerRadius={50}
@@ -231,7 +214,7 @@ export default function Reports() {
                         paddingAngle={2}
                         dataKey="value"
                       >
-                        {topProducts.map((entry, index) => (
+                        {pieData.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
@@ -247,7 +230,7 @@ export default function Reports() {
                   </ResponsiveContainer>
                 </div>
                 <div className="mt-4 space-y-2">
-                  {topProducts.map((item) => (
+                  {pieData.map((item) => (
                     <div key={item.name} className="flex items-center justify-between text-sm">
                       <div className="flex items-center gap-2">
                         <div
@@ -257,7 +240,7 @@ export default function Reports() {
                         <span className="text-muted-foreground truncate max-w-[120px]">{item.name}</span>
                       </div>
                       <span className="font-medium text-foreground">
-                        {totalStockValue > 0 ? ((item.value / totalStockValue) * 100).toFixed(0) : 0}%
+                        {totalRevenue > 0 ? ((item.value / totalRevenue) * 100).toFixed(0) : 0}%
                       </span>
                     </div>
                   ))}
