@@ -21,16 +21,15 @@ import { useCreateSale } from "@/hooks/useSales";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { Product } from "@/types/database";
 
 interface CartItem {
   id: string;
-  name: string;
-  price: number;
-  cost_price: number;
+  product: Product;
   quantity: number;
   stock: number;
-  product_id: string;
 }
+
 
 export default function POS() {
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -54,18 +53,18 @@ export default function POS() {
     return matchesSearch && matchesCategory && product.is_active;
   }) || [];
 
-  const addToCart = (product: any) => {
-    const stock = product.inventory?.[0]?.quantity || 0;
-    
+  const addToCart = (product: Product) => {
+    const stock = product.total_stock ?? 0;
+
     setCart((prev) => {
-      const existing = prev.find((item) => item.product_id === product.id);
+      const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
         if (existing.quantity >= stock) {
           toast({ title: "Not enough stock", variant: "destructive" });
           return prev;
         }
         return prev.map((item) =>
-          item.product_id === product.id
+          item.product.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
@@ -74,17 +73,18 @@ export default function POS() {
         toast({ title: "Out of stock", variant: "destructive" });
         return prev;
       }
-      return [...prev, {
-        id: crypto.randomUUID(),
-        product_id: product.id,
-        name: product.name,
-        price: product.sell_price,
-        cost_price: product.cost_price,
-        quantity: 1,
-        stock,
-      }];
+      return [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          product,
+          quantity: 1,
+          stock,
+        },
+      ];
     });
   };
+
 
   const updateQuantity = (id: string, delta: number) => {
     setCart((prev) =>
@@ -112,7 +112,7 @@ export default function POS() {
     setCustomerName("");
   };
 
-  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = cart.reduce((sum, item) => sum + item.product.sell_price * item.quantity, 0);
   const discountAmount = (subtotal * discount) / 100;
   const total = subtotal - discountAmount;
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -128,36 +128,38 @@ export default function POS() {
       return;
     }
 
-    const saleData = {
-      branch_id: branch.id,
-      warehouse_id: warehouse.id,
+    const taxAmount = 0;
+    const totalWithTax = total + taxAmount;
+
+    const saleInput = {
+      items: cart.map((item) => ({
+        product: item.product,
+        quantity: item.quantity,
+      })),
       subtotal,
       discount_amount: discountAmount,
-      total,
+      tax_amount: taxAmount,
+      total: totalWithTax,
       payment_method: method,
-      payment_amount: total,
-      customer_name: customerName || null,
-      items: cart.map((item) => ({
-        product_id: item.product_id,
-        quantity: item.quantity,
-        sell_price: item.price,
-        cost_price: item.cost_price,
-        discount_amount: 0,
-        total: item.price * item.quantity,
-        profit: (item.price - item.cost_price) * item.quantity,
-      })),
+      payment_amount: totalWithTax,
+      customer_name: customerName ? customerName : undefined,
     };
 
-    createSale.mutate(saleData, {
+    createSale.mutate(saleInput, {
       onSuccess: () => {
         toast({ title: "Sale completed successfully!" });
         clearCart();
       },
       onError: (error: any) => {
-        toast({ title: "Sale failed", description: error.message, variant: "destructive" });
+        toast({
+          title: "Sale failed",
+          description: error.message,
+          variant: "destructive",
+        });
       },
     });
   };
+
 
   const getCategoryIcon = (categoryName: string) => {
     const name = categoryName.toLowerCase();

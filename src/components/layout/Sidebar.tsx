@@ -21,6 +21,8 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "POS / Cashier", href: "/pos", icon: ShoppingCart },
   { name: "Products", href: "/products", icon: Package },
+  { name: "Suppliers", href: "/suppliers", icon: Truck },
+  { name: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList },
   { name: "Warehouses", href: "/warehouses", icon: Warehouse },
   { name: "Transactions", href: "/transactions", icon: Receipt },
   { name: "Expenses", href: "/expenses", icon: DollarSign },
