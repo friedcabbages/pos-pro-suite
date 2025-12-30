@@ -35,7 +35,7 @@ import {
   TrendingUp,
   Loader2,
 } from "lucide-react";
-import { useExpenses } from "@/hooks/useExpenses";
+import { useExpenses, useCreateExpense } from "@/hooks/useExpenses";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
@@ -62,7 +62,8 @@ export default function Expenses() {
     expense_date: new Date().toISOString().split("T")[0],
   });
 
-  const { expenses, isLoading, createExpense } = useExpenses();
+  const { data: expenses, isLoading } = useExpenses();
+  const createExpense = useCreateExpense();
   const { business, branch } = useBusiness();
   const { toast } = useToast();
 

@@ -17,12 +17,6 @@ import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 
-const statusStyles = {
-  completed: "bg-success/10 text-success border-success/30",
-  refunded: "bg-warning/10 text-warning border-warning/30",
-  pending: "bg-muted text-muted-foreground border-border",
-};
-
 const paymentStyles: Record<string, string> = {
   cash: "bg-primary/10 text-primary",
   card: "bg-secondary text-secondary-foreground",
@@ -33,7 +27,7 @@ const paymentStyles: Record<string, string> = {
 
 export default function Transactions() {
   const [search, setSearch] = useState("");
-  const { sales, isLoading } = useSales();
+  const { data: sales, isLoading } = useSales();
   const { business } = useBusiness();
 
   const filteredTransactions = sales?.filter(

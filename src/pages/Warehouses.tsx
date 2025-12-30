@@ -18,7 +18,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useWarehouses } from "@/hooks/useWarehouses";
+import { useWarehouses, useCreateWarehouse, useDeleteWarehouse } from "@/hooks/useWarehouses";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -30,7 +30,9 @@ export default function Warehouses() {
     address: "",
   });
 
-  const { warehouses, isLoading, createWarehouse, deleteWarehouse } = useWarehouses();
+  const { data: warehouses, isLoading } = useWarehouses();
+  const createWarehouse = useCreateWarehouse();
+  const deleteWarehouse = useDeleteWarehouse();
   const { branch, business } = useBusiness();
   const { toast } = useToast();
 

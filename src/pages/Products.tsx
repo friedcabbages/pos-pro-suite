@@ -29,7 +29,6 @@ import { Label } from "@/components/ui/label";
 import {
   Search,
   Plus,
-  Filter,
   Download,
   MoreHorizontal,
   Edit,
@@ -43,7 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useProducts } from "@/hooks/useProducts";
+import { useProducts, useCreateProduct, useDeleteProduct } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -76,8 +75,10 @@ export default function Products() {
   });
 
   const { business } = useBusiness();
-  const { products, isLoading, createProduct, deleteProduct } = useProducts();
-  const { categories } = useCategories();
+  const { data: products, isLoading } = useProducts();
+  const { data: categories } = useCategories();
+  const createProduct = useCreateProduct();
+  const deleteProduct = useDeleteProduct();
   const { toast } = useToast();
 
   const filteredProducts = products?.filter((product) => {
