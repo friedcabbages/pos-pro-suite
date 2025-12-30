@@ -15,6 +15,8 @@ import Warehouses from "./pages/Warehouses";
 import Transactions from "./pages/Transactions";
 import Expenses from "./pages/Expenses";
 import Reports from "./pages/Reports";
+import Suppliers from "./pages/Suppliers";
+import PurchaseOrders from "./pages/PurchaseOrders";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";

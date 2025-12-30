@@ -91,12 +91,13 @@ export default function Products() {
   }) || [];
 
   const getProductStatus = (product: any) => {
-    const stock = product.inventory?.[0]?.quantity || 0;
+    const stock = product.total_stock ?? 0;
     const minStock = product.min_stock || 0;
     if (stock === 0) return "out_of_stock";
     if (stock <= minStock) return "low_stock";
     return "in_stock";
   };
+
 
   const getCategoryIcon = (categoryName?: string) => {
     if (!categoryName) return "📦";

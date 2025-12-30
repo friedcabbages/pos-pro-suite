@@ -42,7 +42,7 @@ import {
   Loader2,
   Package,
 } from "lucide-react";
-import { usePurchaseOrders, useCreatePurchaseOrder, useReceivePurchaseOrder } from "@/hooks/usePurchaseOrders";
+import { usePurchaseOrders, useCreatePurchaseOrder, useUpdatePOStatus } from "@/hooks/usePurchaseOrders";
 import { useSuppliers } from "@/hooks/useSuppliers";
 import { useProducts } from "@/hooks/useProducts";
 import { useBusiness } from "@/contexts/BusinessContext";
@@ -75,7 +75,7 @@ export default function PurchaseOrders() {
   const { data: suppliers } = useSuppliers();
   const { data: products } = useProducts();
   const createPO = useCreatePurchaseOrder();
-  const receivePO = useReceivePurchaseOrder();
+  const updatePOStatus = useUpdatePOStatus();
   const { toast } = useToast();
 
   const filteredOrders = purchaseOrders?.filter((po) => {
@@ -142,10 +142,18 @@ export default function PurchaseOrders() {
 
   const handleReceive = (id: string) => {
     if (confirm("Mark this order as received? This will update inventory.")) {
-      receivePO.mutate(id, {
-        onSuccess: () => toast({ title: "Order received and inventory updated" }),
-        onError: (error: any) => toast({ title: "Failed to receive", description: error.message, variant: "destructive" }),
-      });
+      updatePOStatus.mutate(
+        { id, status: "received" },
+        {
+          onSuccess: () => toast({ title: "Order received and inventory updated" }),
+          onError: (error: any) =>
+            toast({
+              title: "Failed to receive",
+              description: error.message,
+              variant: "destructive",
+            }),
+        }
+      );
     }
   };
 
