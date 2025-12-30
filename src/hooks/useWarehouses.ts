@@ -3,12 +3,14 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBusiness } from '@/contexts/BusinessContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Warehouse } from '@/types/database';
+import { createAuditLog } from '@/lib/audit';
 import { toast } from 'sonner';
 
-interface WarehouseWithStats extends Warehouse {
+interface WarehouseWithStats extends Omit<Warehouse, 'branch'> {
   products_count: number;
   total_value: number;
   low_stock_count: number;
+  branch?: { id: string; name: string; business_id: string };
 }
 
 export function useWarehouses() {
@@ -19,7 +21,6 @@ export function useWarehouses() {
     queryFn: async () => {
       if (!business?.id) return [];
 
-      // Get warehouses with branch info
       const { data: warehouses, error } = await supabase
         .from('warehouses')
         .select(`
@@ -31,11 +32,9 @@ export function useWarehouses() {
 
       if (error) throw error;
 
-      // Get inventory stats for each warehouse
       const result: WarehouseWithStats[] = [];
       
       for (const warehouse of warehouses) {
-        // Get inventory with product info
         const { data: inventory } = await supabase
           .from('inventory')
           .select(`
@@ -62,7 +61,14 @@ export function useWarehouses() {
         }
 
         result.push({
-          ...warehouse,
+          id: warehouse.id,
+          branch_id: warehouse.branch_id,
+          name: warehouse.name,
+          address: warehouse.address,
+          is_active: warehouse.is_active,
+          created_at: warehouse.created_at,
+          updated_at: warehouse.updated_at,
+          branch: warehouse.branch as { id: string; name: string; business_id: string },
           products_count,
           total_value,
           low_stock_count
@@ -86,23 +92,24 @@ export function useCreateWarehouse() {
 
       const { data, error } = await supabase
         .from('warehouses')
-        .insert({
-          ...warehouse,
+        .insert([{
+          name: warehouse.name,
+          address: warehouse.address || null,
           branch_id: warehouse.branch_id || branch.id
-        })
+        }])
         .select()
         .single();
 
       if (error) throw error;
 
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'warehouse',
           entity_id: data.id,
           action: 'create',
-          new_value: data
+          new_value: data as Record<string, unknown>
         });
       }
 
@@ -125,9 +132,11 @@ export function useUpdateWarehouse() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Warehouse> & { id: string }) => {
+      const { branch, ...cleanUpdates } = updates;
+
       const { data, error } = await supabase
         .from('warehouses')
-        .update(updates)
+        .update(cleanUpdates)
         .eq('id', id)
         .select()
         .single();
@@ -135,13 +144,13 @@ export function useUpdateWarehouse() {
       if (error) throw error;
 
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'warehouse',
           entity_id: id,
           action: 'update',
-          new_value: updates
+          new_value: cleanUpdates as Record<string, unknown>
         });
       }
 
@@ -164,7 +173,6 @@ export function useDeleteWarehouse() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Soft delete
       const { error } = await supabase
         .from('warehouses')
         .update({ is_active: false })
@@ -173,7 +181,7 @@ export function useDeleteWarehouse() {
       if (error) throw error;
 
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'warehouse',

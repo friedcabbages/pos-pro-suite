@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusiness } from '@/contexts/BusinessContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { PurchaseOrder, PurchaseOrderItem, POStatus, Product } from '@/types/database';
+import { PurchaseOrder, PurchaseOrderItem, POStatus } from '@/types/database';
+import { createAuditLog, logInventoryChange } from '@/lib/audit';
 import { toast } from 'sonner';
 
 interface POItemInput {
@@ -64,7 +65,6 @@ export function useCreatePurchaseOrder() {
         throw new Error('Business, branch, or warehouse not selected');
       }
 
-      // Generate PO number
       const timestamp = Date.now().toString(36).toUpperCase();
       const po_number = `PO-${timestamp}`;
 
@@ -73,38 +73,35 @@ export function useCreatePurchaseOrder() {
         0
       );
 
-      // Create PO
       const { data: po, error: poError } = await supabase
         .from('purchase_orders')
-        .insert({
+        .insert([{
           business_id: business.id,
           branch_id: branch.id,
           warehouse_id: warehouse.id,
           supplier_id: input.supplier_id,
           po_number,
-          status: 'draft',
+          status: 'draft' as POStatus,
           total_cost,
-          notes: input.notes,
-          created_by: user?.id
-        })
+          notes: input.notes || null,
+          created_by: user?.id || null
+        }])
         .select()
         .single();
 
       if (poError) throw poError;
 
-      // Create PO items
       for (const item of input.items) {
-        await supabase.from('purchase_order_items').insert({
+        await supabase.from('purchase_order_items').insert([{
           purchase_order_id: po.id,
           product_id: item.product_id,
           quantity: item.quantity,
           cost_price: item.cost_price,
           total_cost: item.cost_price * item.quantity
-        });
+        }]);
       }
 
-      // Audit log
-      await supabase.from('audit_logs').insert({
+      await createAuditLog({
         business_id: business.id,
         user_id: user?.id,
         entity_type: 'purchase_order',
@@ -127,7 +124,7 @@ export function useCreatePurchaseOrder() {
 
 export function useUpdatePOStatus() {
   const queryClient = useQueryClient();
-  const { business, warehouse } = useBusiness();
+  const { business } = useBusiness();
   const { user } = useAuth();
 
   return useMutation({
@@ -138,12 +135,10 @@ export function useUpdatePOStatus() {
         updates.ordered_at = new Date().toISOString();
       }
 
-      // If receiving, handle inventory updates
       if (status === 'received') {
         updates.received_at = new Date().toISOString();
         updates.received_by = user?.id;
 
-        // Get PO with items
         const { data: po } = await supabase
           .from('purchase_orders')
           .select(`
@@ -155,7 +150,6 @@ export function useUpdatePOStatus() {
 
         if (po && po.items) {
           for (const item of po.items as PurchaseOrderItem[]) {
-            // Get current inventory
             const { data: inventory } = await supabase
               .from('inventory')
               .select('id, quantity')
@@ -166,28 +160,25 @@ export function useUpdatePOStatus() {
             const currentQty = inventory?.quantity || 0;
             const newQty = currentQty + item.quantity;
 
-            // Update or insert inventory
             if (inventory) {
               await supabase
                 .from('inventory')
                 .update({ quantity: newQty })
                 .eq('id', inventory.id);
             } else {
-              await supabase.from('inventory').insert({
+              await supabase.from('inventory').insert([{
                 product_id: item.product_id,
                 warehouse_id: po.warehouse_id,
                 quantity: item.quantity
-              });
+              }]);
             }
 
-            // Update received quantity
             await supabase
               .from('purchase_order_items')
               .update({ received_quantity: item.quantity })
               .eq('id', item.id);
 
-            // Log inventory change
-            await supabase.from('inventory_logs').insert({
+            await logInventoryChange({
               product_id: item.product_id,
               warehouse_id: po.warehouse_id,
               action: 'po_receive',
@@ -219,9 +210,8 @@ export function useUpdatePOStatus() {
                 .update({ cost_price: newAvgCost })
                 .eq('id', item.product_id);
 
-              // Audit price change
               if (business) {
-                await supabase.from('audit_logs').insert({
+                await createAuditLog({
                   business_id: business.id,
                   user_id: user?.id,
                   entity_type: 'product',
@@ -245,9 +235,8 @@ export function useUpdatePOStatus() {
 
       if (error) throw error;
 
-      // Audit log
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'purchase_order',

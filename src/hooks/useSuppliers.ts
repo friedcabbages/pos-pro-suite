@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBusiness } from '@/contexts/BusinessContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Supplier } from '@/types/database';
+import { createAuditLog } from '@/lib/audit';
 import { toast } from 'sonner';
 
 export function useSuppliers() {
@@ -58,23 +59,28 @@ export function useCreateSupplier() {
 
       const { data, error } = await supabase
         .from('suppliers')
-        .insert({
-          ...supplier,
-          business_id: business.id
-        })
+        .insert([{
+          name: supplier.name || 'Unnamed Supplier',
+          business_id: business.id,
+          contact_person: supplier.contact_person || null,
+          phone: supplier.phone || null,
+          email: supplier.email || null,
+          address: supplier.address || null,
+          notes: supplier.notes || null,
+          is_active: supplier.is_active ?? true
+        }])
         .select()
         .single();
 
       if (error) throw error;
 
-      // Audit log
-      await supabase.from('audit_logs').insert({
+      await createAuditLog({
         business_id: business.id,
         user_id: user?.id,
         entity_type: 'supplier',
         entity_id: data.id,
         action: 'create',
-        new_value: data
+        new_value: data as Record<string, unknown>
       });
 
       return data;
@@ -106,13 +112,13 @@ export function useUpdateSupplier() {
       if (error) throw error;
 
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'supplier',
           entity_id: id,
           action: 'update',
-          new_value: updates
+          new_value: updates as Record<string, unknown>
         });
       }
 
@@ -135,7 +141,6 @@ export function useDeleteSupplier() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Soft delete
       const { error } = await supabase
         .from('suppliers')
         .update({ is_active: false })
@@ -144,7 +149,7 @@ export function useDeleteSupplier() {
       if (error) throw error;
 
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'supplier',

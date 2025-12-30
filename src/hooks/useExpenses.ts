@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useBusiness } from '@/contexts/BusinessContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { Expense } from '@/types/database';
+import { createAuditLog } from '@/lib/audit';
 import { toast } from 'sonner';
 
 export function useExpenses(dateRange?: { start: Date; end: Date }) {
@@ -89,25 +90,29 @@ export function useCreateExpense() {
 
       const { data, error } = await supabase
         .from('expenses')
-        .insert({
-          ...expense,
+        .insert([{
+          category: expense.category || 'Other',
+          amount: expense.amount || 0,
           business_id: business.id,
-          branch_id: expense.branch_id || branch?.id,
-          created_by: user?.id
-        })
+          branch_id: expense.branch_id || branch?.id || null,
+          description: expense.description || null,
+          expense_date: expense.expense_date || new Date().toISOString().split('T')[0],
+          is_fixed: expense.is_fixed || false,
+          receipt_url: expense.receipt_url || null,
+          created_by: user?.id || null
+        }])
         .select()
         .single();
 
       if (error) throw error;
 
-      // Audit log
-      await supabase.from('audit_logs').insert({
+      await createAuditLog({
         business_id: business.id,
         user_id: user?.id,
         entity_type: 'expense',
         entity_id: data.id,
         action: 'create',
-        new_value: data
+        new_value: data as Record<string, unknown>
       });
 
       return data;
@@ -130,16 +135,17 @@ export function useUpdateExpense() {
 
   return useMutation({
     mutationFn: async ({ id, ...updates }: Partial<Expense> & { id: string }) => {
-      // Get old value for audit
       const { data: oldData } = await supabase
         .from('expenses')
         .select()
         .eq('id', id)
         .single();
 
+      const { branch, ...cleanUpdates } = updates;
+
       const { data, error } = await supabase
         .from('expenses')
-        .update(updates)
+        .update(cleanUpdates)
         .eq('id', id)
         .select()
         .single();
@@ -147,14 +153,14 @@ export function useUpdateExpense() {
       if (error) throw error;
 
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'expense',
           entity_id: id,
           action: 'update',
-          old_value: oldData,
-          new_value: data
+          old_value: oldData as Record<string, unknown>,
+          new_value: data as Record<string, unknown>
         });
       }
 
@@ -186,7 +192,7 @@ export function useDeleteExpense() {
       if (error) throw error;
 
       if (business) {
-        await supabase.from('audit_logs').insert({
+        await createAuditLog({
           business_id: business.id,
           user_id: user?.id,
           entity_type: 'expense',
