@@ -1,4 +1,4 @@
-import { Receipt, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 const transactions = [
@@ -46,10 +46,10 @@ const transactions = [
 
 export function RecentTransactions() {
   return (
-    <div className="rounded-xl border border-border bg-card p-6 shadow-card animate-slide-up" style={{ animationDelay: "400ms" }}>
-      <div className="mb-6 flex items-center justify-between">
+    <div className="rounded-lg border border-border bg-card p-5">
+      <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold text-foreground">Recent Transactions</h3>
+          <h3 className="text-base font-semibold text-foreground">Recent Transactions</h3>
           <p className="text-sm text-muted-foreground">Latest sales activity</p>
         </div>
         <button className="text-sm font-medium text-primary hover:underline">
@@ -57,14 +57,14 @@ export function RecentTransactions() {
         </button>
       </div>
 
-      <div className="space-y-3">
+      <div className="space-y-2">
         {transactions.map((transaction) => (
           <div
             key={transaction.id}
-            className="flex items-center gap-4 rounded-lg border border-border/50 p-4 transition-all hover:border-border hover:bg-secondary/30"
+            className="flex items-center gap-3 rounded-md p-3 transition-colors hover:bg-muted/50"
           >
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-              <Receipt className="h-5 w-5 text-primary" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
+              <Receipt className="h-4 w-4 text-muted-foreground" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
@@ -73,7 +73,7 @@ export function RecentTransactions() {
                 </p>
                 <Badge
                   variant={transaction.status === "completed" ? "default" : "secondary"}
-                  className="text-xs"
+                  className="text-xs font-normal"
                 >
                   {transaction.status}
                 </Badge>
@@ -83,7 +83,7 @@ export function RecentTransactions() {
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm font-semibold text-foreground">
+              <p className="text-sm font-semibold text-foreground tabular-nums">
                 {transaction.amount}
               </p>
               <p className="text-xs text-muted-foreground">{transaction.time}</p>

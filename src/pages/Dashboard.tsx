@@ -33,11 +33,11 @@ export default function Dashboard() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="animate-fade-in">
-          <h1 className="text-3xl font-bold tracking-tight text-foreground">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">
             Dashboard
           </h1>
-          <p className="mt-1 text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Welcome back! Here's what's happening with {business?.name || 'your business'}.
           </p>
         </div>
@@ -47,7 +47,7 @@ export default function Dashboard() {
           {isLoading ? (
             <>
               {[...Array(4)].map((_, i) => (
-                <Skeleton key={i} className="h-32 rounded-xl" />
+                <Skeleton key={i} className="h-28 rounded-lg" />
               ))}
             </>
           ) : (
@@ -59,7 +59,6 @@ export default function Dashboard() {
                 changeLabel="today's revenue"
                 icon={DollarSign}
                 variant="success"
-                delay={0}
               />
               <KPICard
                 title="Monthly Revenue"
@@ -67,7 +66,6 @@ export default function Dashboard() {
                 change={8.2}
                 changeLabel="vs last month"
                 icon={TrendingUp}
-                delay={50}
               />
               <KPICard
                 title="Today's Orders"
@@ -75,7 +73,6 @@ export default function Dashboard() {
                 change={0}
                 changeLabel="transactions"
                 icon={ShoppingCart}
-                delay={100}
               />
               <KPICard
                 title="Products"
@@ -83,7 +80,6 @@ export default function Dashboard() {
                 change={lowStock?.length || 0}
                 changeLabel="low stock"
                 icon={Package}
-                delay={150}
               />
             </>
           )}

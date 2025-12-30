@@ -10,43 +10,46 @@ const lowStockItems = [
 
 export function LowStockAlert() {
   return (
-    <div className="rounded-xl border border-warning/30 bg-warning/5 p-6 shadow-card animate-slide-up" style={{ animationDelay: "500ms" }}>
+    <div className="rounded-lg border border-warning/30 bg-warning/5 p-5">
       <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-warning/20">
+        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-warning/10">
           <AlertTriangle className="h-4 w-4 text-warning" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold text-foreground">Low Stock Alert</h3>
-          <p className="text-xs text-muted-foreground">{lowStockItems.length} items need attention</p>
+          <h3 className="text-base font-semibold text-foreground">Low Stock Alert</h3>
+          <p className="text-sm text-muted-foreground">{lowStockItems.length} items need attention</p>
         </div>
       </div>
 
-      <div className="space-y-3">
-        {lowStockItems.map((item) => (
-          <div
-            key={item.name}
-            className="flex items-center gap-3 rounded-lg bg-background/50 p-3"
-          >
-            <Package className="h-4 w-4 text-warning" />
-            <div className="flex-1 min-w-0">
-              <p className="truncate text-sm font-medium text-foreground">
-                {item.name}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {item.current} / {item.minimum} {item.unit}
-              </p>
+      <div className="space-y-2">
+        {lowStockItems.map((item) => {
+          const percentage = (item.current / item.minimum) * 100;
+          return (
+            <div
+              key={item.name}
+              className="flex items-center gap-3 rounded-md bg-card p-3"
+            >
+              <Package className="h-4 w-4 text-warning" />
+              <div className="flex-1 min-w-0">
+                <p className="truncate text-sm font-medium text-foreground">
+                  {item.name}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {item.current} / {item.minimum} {item.unit}
+                </p>
+              </div>
+              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full bg-warning transition-all"
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
             </div>
-            <div className="h-2 w-16 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full bg-warning transition-all"
-                style={{ width: `${(item.current / item.minimum) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <Button variant="warning" className="mt-4 w-full" size="sm">
+      <Button variant="outline" size="sm" className="mt-4 w-full">
         View Inventory
       </Button>
     </div>
