@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
+import { useBusiness } from "@/contexts/BusinessContext";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -39,7 +41,30 @@ const navigation = [
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+  const { clearBusiness, userRole } = useBusiness();
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      clearBusiness();
+      await signOut();
+      navigate("/auth", { replace: true });
+    } catch (error) {
+      console.error('[Sidebar] Logout error:', error);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
+  // Get user initials
+  const getUserInitials = () => {
+    const email = user?.email || "";
+    return email.substring(0, 2).toUpperCase();
+  };
 
   return (
     <aside
@@ -97,24 +122,30 @@ export function Sidebar() {
           {!collapsed && (
             <div className="mb-2 flex items-center gap-2">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-medium text-muted-foreground">
-                JD
+                {getUserInitials()}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">John Doe</p>
-                <p className="text-xs text-muted-foreground">Admin</p>
+                <p className="text-sm font-medium text-foreground truncate">
+                  {user?.email?.split('@')[0] || 'User'}
+                </p>
+                <p className="text-xs text-muted-foreground capitalize">
+                  {userRole?.role || 'User'}
+                </p>
               </div>
             </div>
           )}
           <Button
             variant="ghost"
             size="sm"
+            onClick={handleLogout}
+            disabled={loggingOut}
             className={cn(
               "w-full justify-start text-muted-foreground hover:text-foreground",
               collapsed && "justify-center px-0"
             )}
           >
             <LogOut className="h-4 w-4" />
-            {!collapsed && <span className="ml-2">Logout</span>}
+            {!collapsed && <span className="ml-2">{loggingOut ? 'Logging out...' : 'Logout'}</span>}
           </Button>
         </div>
 
