@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -10,31 +12,41 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Search, MoreHorizontal, Shield, User, UserCog } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Plus, Search, MoreHorizontal, Shield, User, UserCog, Loader2, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole } from "@/hooks/useUsers";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
-
-interface UserWithRole {
-  id: string;
-  user_id: string;
-  role: "owner" | "admin" | "cashier";
-  branch_id: string | null;
-  profile?: {
-    full_name: string | null;
-    phone: string | null;
-  };
-  branch?: {
-    name: string;
-  };
-}
+import { toast } from "sonner";
 
 const roleIcons = {
   owner: Shield,
@@ -50,62 +62,80 @@ const roleColors = {
 
 export default function Users() {
   const [search, setSearch] = useState("");
-  const [users, setUsers] = useState<UserWithRole[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const { business } = useBusiness();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+    full_name: "",
+    role: "cashier" as "admin" | "cashier",
+    branch_id: "",
+  });
 
-  useEffect(() => {
-    if (!business?.id) return;
+  const { business, branches, isOwner } = useBusiness();
+  const { data: users, isLoading } = useUsers();
+  const createUser = useCreateUser();
+  const deleteUser = useDeleteUser();
+  const updateUserRole = useUpdateUserRole();
 
-    const fetchUsers = async () => {
-      setIsLoading(true);
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select(`
-          id,
-          user_id,
-          role,
-          branch_id
-        `)
-        .eq("business_id", business.id);
-
-      if (data) {
-        // Fetch profiles for each user
-        const userIds = data.map(u => u.user_id);
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, full_name, phone")
-          .in("id", userIds);
-
-        // Fetch branches
-        const branchIds = data.filter(u => u.branch_id).map(u => u.branch_id!);
-        const { data: branches } = await supabase
-          .from("branches")
-          .select("id, name")
-          .in("id", branchIds);
-
-        const usersWithData = data.map(user => ({
-          ...user,
-          profile: profiles?.find(p => p.id === user.user_id),
-          branch: branches?.find(b => b.id === user.branch_id),
-        }));
-
-        setUsers(usersWithData);
-      }
-      setIsLoading(false);
-    };
-
-    fetchUsers();
-  }, [business?.id]);
-
-  const filteredUsers = users.filter(
+  const filteredUsers = users?.filter(
     (user) =>
-      (user.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ?? false)
-  );
+      user.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ?? false
+  ) || [];
 
-  const ownerCount = users.filter(u => u.role === "owner").length;
-  const adminCount = users.filter(u => u.role === "admin").length;
-  const cashierCount = users.filter(u => u.role === "cashier").length;
+  const ownerCount = users?.filter((u) => u.role === "owner").length || 0;
+  const adminCount = users?.filter((u) => u.role === "admin").length || 0;
+  const cashierCount = users?.filter((u) => u.role === "cashier").length || 0;
+
+  const handleCreate = () => {
+    if (!formData.email.trim() || !formData.password.trim() || !formData.full_name.trim()) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    createUser.mutate(
+      {
+        email: formData.email,
+        password: formData.password,
+        full_name: formData.full_name,
+        role: formData.role,
+        branch_id: formData.branch_id || undefined,
+      },
+      {
+        onSuccess: () => {
+          setIsDialogOpen(false);
+          setFormData({
+            email: "",
+            password: "",
+            full_name: "",
+            role: "cashier",
+            branch_id: "",
+          });
+        },
+      }
+    );
+  };
+
+  const handleDelete = (id: string, role: string) => {
+    if (role === "owner") {
+      toast.error("Cannot remove the owner");
+      return;
+    }
+    setDeleteId(id);
+  };
+
+  const confirmDelete = () => {
+    if (deleteId) {
+      deleteUser.mutate(deleteId, {
+        onSuccess: () => setDeleteId(null),
+      });
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -120,10 +150,89 @@ export default function Users() {
               Manage user accounts and access permissions
             </p>
           </div>
-          <Button variant="glow">
-            <Plus className="mr-2 h-4 w-4" />
-            Invite User
-          </Button>
+          {isOwner && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add User
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New User</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Full Name *</Label>
+                    <Input
+                      value={formData.full_name}
+                      onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+                      placeholder="John Doe"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email *</Label>
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="user@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Password *</Label>
+                    <Input
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Min 6 characters"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <Select
+                      value={formData.role}
+                      onValueChange={(v) => setFormData({ ...formData, role: v as "admin" | "cashier" })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Admin - Full access</SelectItem>
+                        <SelectItem value="cashier">Cashier - POS only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {branches.length > 1 && (
+                    <div className="space-y-2">
+                      <Label>Branch (optional)</Label>
+                      <Select
+                        value={formData.branch_id}
+                        onValueChange={(v) => setFormData({ ...formData, branch_id: v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="All branches" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">All Branches</SelectItem>
+                          {branches.map((branch) => (
+                            <SelectItem key={branch.id} value={branch.id}>
+                              {branch.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  <Button onClick={handleCreate} className="w-full" disabled={createUser.isPending}>
+                    {createUser.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Create User
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          )}
         </div>
 
         {/* Role Summary */}
@@ -228,10 +337,7 @@ export default function Users() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={roleColors[user.role]}
-                          >
+                          <Badge variant="outline" className={roleColors[user.role]}>
                             <RoleIcon className="mr-1 h-3 w-3" />
                             {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
                           </Badge>
@@ -240,24 +346,39 @@ export default function Users() {
                           {user.branch?.name || "All Branches"}
                         </TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="opacity-0 group-hover:opacity-100"
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem>Edit Role</DropdownMenuItem>
-                              <DropdownMenuItem>Change Branch</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive">
-                                Remove Access
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          {isOwner && user.role !== "owner" && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="opacity-0 group-hover:opacity-100"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    updateUserRole.mutate({
+                                      id: user.id,
+                                      role: user.role === "admin" ? "cashier" : "admin",
+                                    })
+                                  }
+                                >
+                                  <UserCog className="mr-2 h-4 w-4" />
+                                  Change to {user.role === "admin" ? "Cashier" : "Admin"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => handleDelete(user.id, user.role)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Remove Access
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -268,6 +389,25 @@ export default function Users() {
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove User Access</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to remove this user's access? They will no longer be able to access
+              the system.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground">
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
