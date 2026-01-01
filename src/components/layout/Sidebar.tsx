@@ -20,23 +20,33 @@ import {
   ClipboardList,
   Boxes,
   FileText,
+  Tag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-const navigation = [
+type NavItem = {
+  name: string;
+  href: string;
+  icon: typeof LayoutDashboard;
+  adminOnly?: boolean;
+  ownerOnly?: boolean;
+};
+
+const navigation: NavItem[] = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "POS / Cashier", href: "/pos", icon: ShoppingCart },
   { name: "Products", href: "/products", icon: Package },
-  { name: "Inventory", href: "/inventory", icon: Boxes },
-  { name: "Suppliers", href: "/suppliers", icon: Truck },
-  { name: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList },
-  { name: "Warehouses", href: "/warehouses", icon: Warehouse },
-  { name: "Transactions", href: "/transactions", icon: Receipt },
-  { name: "Expenses", href: "/expenses", icon: DollarSign },
-  { name: "Reports", href: "/reports", icon: TrendingUp },
-  { name: "Audit Logs", href: "/audit-logs", icon: FileText },
-  { name: "Users", href: "/users", icon: Users },
-  { name: "Settings", href: "/settings", icon: Settings },
+  { name: "Categories", href: "/categories", icon: Tag, adminOnly: true },
+  { name: "Inventory", href: "/inventory", icon: Boxes, adminOnly: true },
+  { name: "Suppliers", href: "/suppliers", icon: Truck, adminOnly: true },
+  { name: "Purchase Orders", href: "/purchase-orders", icon: ClipboardList, adminOnly: true },
+  { name: "Warehouses", href: "/warehouses", icon: Warehouse, adminOnly: true },
+  { name: "Transactions", href: "/transactions", icon: Receipt, adminOnly: true },
+  { name: "Expenses", href: "/expenses", icon: DollarSign, adminOnly: true },
+  { name: "Reports", href: "/reports", icon: TrendingUp, adminOnly: true },
+  { name: "Audit Logs", href: "/audit-logs", icon: FileText, adminOnly: true },
+  { name: "Users", href: "/users", icon: Users, ownerOnly: true },
+  { name: "Settings", href: "/settings", icon: Settings, ownerOnly: true },
 ];
 
 export function Sidebar() {
@@ -45,7 +55,7 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { clearBusiness, userRole } = useBusiness();
+  const { clearBusiness, userRole, isAdmin, isOwner, isCashier } = useBusiness();
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -65,6 +75,13 @@ export function Sidebar() {
     const email = user?.email || "";
     return email.substring(0, 2).toUpperCase();
   };
+
+  // Filter navigation based on user role
+  const filteredNavigation = navigation.filter((item) => {
+    if (item.ownerOnly && !isOwner) return false;
+    if (item.adminOnly && !isAdmin && !isOwner) return false;
+    return true;
+  });
 
   return (
     <aside
@@ -96,7 +113,7 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 px-2">
           <div className="space-y-0.5">
-            {navigation.map((item) => {
+            {filteredNavigation.map((item) => {
               const isActive = location.pathname === item.href;
               return (
                 <Link

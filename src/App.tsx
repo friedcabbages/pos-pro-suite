@@ -5,12 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BusinessProvider } from "@/contexts/BusinessContext";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute, AdminRoute, OwnerRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import POS from "./pages/POS";
 import Products from "./pages/Products";
+import Categories from "./pages/Categories";
 import Inventory from "./pages/Inventory";
 import Warehouses from "./pages/Warehouses";
 import Transactions from "./pages/Transactions";
@@ -36,19 +37,27 @@ const App = () => (
             <Routes>
               <Route path="/auth" element={<Auth />} />
               <Route path="/onboarding" element={<Onboarding />} />
+              
+              {/* Public routes for all authenticated users */}
               <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
               <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-              <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-              <Route path="/warehouses" element={<ProtectedRoute><Warehouses /></ProtectedRoute>} />
-              <Route path="/transactions" element={<ProtectedRoute><Transactions /></ProtectedRoute>} />
-              <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
-              <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
-              <Route path="/suppliers" element={<ProtectedRoute><Suppliers /></ProtectedRoute>} />
-              <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrders /></ProtectedRoute>} />
-              <Route path="/audit-logs" element={<ProtectedRoute><AuditLogs /></ProtectedRoute>} />
-              <Route path="/users" element={<ProtectedRoute><Users /></ProtectedRoute>} />
-              <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+              
+              {/* Admin-only routes */}
+              <Route path="/categories" element={<AdminRoute><Categories /></AdminRoute>} />
+              <Route path="/inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
+              <Route path="/warehouses" element={<AdminRoute><Warehouses /></AdminRoute>} />
+              <Route path="/transactions" element={<AdminRoute><Transactions /></AdminRoute>} />
+              <Route path="/expenses" element={<AdminRoute><Expenses /></AdminRoute>} />
+              <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
+              <Route path="/suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
+              <Route path="/purchase-orders" element={<AdminRoute><PurchaseOrders /></AdminRoute>} />
+              <Route path="/audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
+              
+              {/* Owner-only routes */}
+              <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
+              <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
+              
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BusinessProvider>
