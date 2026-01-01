@@ -1,1 +1,14 @@
 project_id = "nepnxpmuuawjozigkpvo"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "storage"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[functions]
+enabled = true
+
+[functions.create-user]
+verify_jwt = true

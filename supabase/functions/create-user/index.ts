@@ -7,15 +7,31 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
+    // Get environment variables
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
+
+    console.log("Edge function called, checking env vars...");
+
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+      console.error("Missing environment variables:", {
+        hasUrl: !!supabaseUrl,
+        hasServiceKey: !!serviceRoleKey,
+        hasAnonKey: !!anonKey,
+      });
+      return new Response(
+        JSON.stringify({ error: "Server configuration error: missing environment variables" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // Create admin client with service role
     const adminClient = createClient(supabaseUrl, serviceRoleKey, {
       auth: {
@@ -27,6 +43,7 @@ serve(async (req) => {
     // Get the authorization header from the request
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
+      console.error("No authorization header provided");
       return new Response(
         JSON.stringify({ error: "No authorization header" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -34,21 +51,44 @@ serve(async (req) => {
     }
 
     // Create a client with the user's token to verify permissions
-    const userClient = createClient(supabaseUrl, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    const userClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
     // Get the current user
     const { data: { user: currentUser }, error: authError } = await userClient.auth.getUser();
     if (authError || !currentUser) {
+      console.error("Auth error:", authError?.message);
       return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
+        JSON.stringify({ error: "Unauthorized: " + (authError?.message || "Invalid token") }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Get the request body
-    const { email, password, full_name, role, business_id, branch_id } = await req.json();
+    console.log("Authenticated user:", currentUser.id);
+
+    // Parse request body with error handling
+    let body;
+    try {
+      const text = await req.text();
+      if (!text || text.trim() === "") {
+        return new Response(
+          JSON.stringify({ error: "Empty request body" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      body = JSON.parse(text);
+    } catch (parseError) {
+      console.error("JSON parse error:", parseError);
+      return new Response(
+        JSON.stringify({ error: "Invalid JSON in request body" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { email, password, full_name, role, business_id, branch_id } = body;
+
+    console.log("Creating user with params:", { email, role, business_id, branch_id: branch_id || null });
 
     // Validate required fields
     if (!email || !password || !role || !business_id) {
@@ -74,12 +114,23 @@ serve(async (req) => {
       .eq("business_id", business_id)
       .single();
 
-    if (roleError || !currentUserRole || currentUserRole.role !== "owner") {
+    if (roleError) {
+      console.error("Role check error:", roleError.message);
+      return new Response(
+        JSON.stringify({ error: "Failed to verify permissions: " + roleError.message }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (!currentUserRole || currentUserRole.role !== "owner") {
+      console.error("Permission denied: user is not owner", currentUserRole);
       return new Response(
         JSON.stringify({ error: "Only business owners can create users" }),
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("Permission check passed, creating auth user...");
 
     // Create the user using admin API
     const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
@@ -90,11 +141,14 @@ serve(async (req) => {
     });
 
     if (createError) {
+      console.error("Create user error:", createError.message);
       return new Response(
         JSON.stringify({ error: createError.message }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("Auth user created:", newUser.user.id);
 
     // Create user role
     const { error: userRoleError } = await adminClient
@@ -107,6 +161,7 @@ serve(async (req) => {
       });
 
     if (userRoleError) {
+      console.error("User role error:", userRoleError.message);
       // Rollback: delete the created user
       await adminClient.auth.admin.deleteUser(newUser.user.id);
       return new Response(
@@ -114,6 +169,8 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    console.log("User role created");
 
     // Update profile with business and branch
     const { error: profileError } = await adminClient
@@ -126,9 +183,11 @@ serve(async (req) => {
       .eq("id", newUser.user.id);
 
     if (profileError) {
-      console.error("Profile update error:", profileError);
+      console.error("Profile update error:", profileError.message);
       // Non-critical, continue
     }
+
+    console.log("User creation completed successfully");
 
     return new Response(
       JSON.stringify({
@@ -143,7 +202,7 @@ serve(async (req) => {
     );
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Error:", errorMessage);
+    console.error("Unhandled error:", errorMessage);
     return new Response(
       JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
