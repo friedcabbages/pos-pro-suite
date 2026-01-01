@@ -265,6 +265,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useBusiness() {
   const context = useContext(BusinessContext);
   if (context === undefined) {
