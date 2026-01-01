@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +13,8 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, Store, Building2, MapPin, ArrowRight } from "lucide-react";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { Loader2, Store, Building2, ArrowRight } from "lucide-react";
 
 export default function Onboarding() {
   const [step, setStep] = useState(1);
@@ -23,9 +24,31 @@ export default function Onboarding() {
   const [branchName, setBranchName] = useState("Main Branch");
   const [branchAddress, setBranchAddress] = useState("");
   const [warehouseName, setWarehouseName] = useState("Main Warehouse");
-  const { user } = useAuth();
+  const { user, initialized: authInitialized, loading: authLoading } = useAuth();
+  const { business, loading: businessLoading, refetchBusiness } = useBusiness();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Redirect to dashboard if already has business
+  if (authInitialized && !authLoading && !businessLoading && business) {
+    console.log('[Onboarding] Already has business, redirecting to /');
+    return <Navigate to="/" replace />;
+  }
+
+  // Redirect to auth if not logged in
+  if (authInitialized && !authLoading && !user) {
+    console.log('[Onboarding] No user, redirecting to /auth');
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Show loading while checking auth/business state
+  if (!authInitialized || authLoading || businessLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   const handleCreateBusiness = async () => {
     if (!user) return;
@@ -98,7 +121,9 @@ export default function Onboarding() {
         description: "Your business has been set up successfully!",
       });
 
-      navigate("/");
+      // Refetch business data before navigating
+      await refetchBusiness();
+      navigate("/", { replace: true });
     } catch (error: any) {
       toast({
         title: "Setup Failed",

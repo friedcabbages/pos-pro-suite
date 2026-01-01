@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Navigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
+import { useBusiness } from "@/contexts/BusinessContext";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Store } from "lucide-react";
 
@@ -13,9 +14,35 @@ export default function Auth() {
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { user, signIn, signUp, initialized: authInitialized, loading: authLoading } = useAuth();
+  const { business, loading: businessLoading } = useBusiness();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+
+  // Get redirect destination
+  const from = (location.state as { from?: { pathname: string } })?.from?.pathname || "/";
+
+  // If already logged in, redirect appropriately
+  if (authInitialized && !authLoading && user) {
+    // Wait for business check
+    if (businessLoading) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+    
+    // Redirect based on business state
+    if (business) {
+      console.log('[Auth] Already logged in with business, redirecting to', from);
+      return <Navigate to={from} replace />;
+    } else {
+      console.log('[Auth] Logged in but no business, redirecting to /onboarding');
+      return <Navigate to="/onboarding" replace />;
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
