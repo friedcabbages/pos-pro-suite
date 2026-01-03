@@ -93,9 +93,10 @@ serve(async (req) => {
     const role = typeof body?.role === "string" ? body.role.trim() : "";
     const business_id = typeof body?.business_id === "string" ? body.business_id.trim() : "";
     const full_name = typeof body?.full_name === "string" ? body.full_name.trim() : null;
+    const phone = typeof body?.phone === "string" && body.phone.trim() !== "" ? body.phone.trim() : null;
     const branch_id = typeof body?.branch_id === "string" && body.branch_id.trim() !== "" ? body.branch_id.trim() : null;
 
-    console.log("Creating user with params:", { email, role, business_id, branch_id });
+    console.log("Creating user with params:", { email, role, business_id, branch_id, phone });
 
     // Validate required fields
     if (!email || !password || !role || !business_id) {
@@ -197,6 +198,7 @@ serve(async (req) => {
       {
         id: newUserId,
         full_name,
+        phone,
         business_id,
         branch_id,
       },

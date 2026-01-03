@@ -68,6 +68,7 @@ export default function Users() {
     email: "",
     password: "",
     full_name: "",
+    phone: "",
     role: "cashier" as "admin" | "cashier",
     branch_id: "",
   });
@@ -106,6 +107,7 @@ export default function Users() {
         email: formData.email,
         password: formData.password,
         full_name: formData.full_name,
+        phone: formData.phone || undefined,
         role: formData.role,
         branch_id: formData.branch_id || undefined,
       },
@@ -116,6 +118,7 @@ export default function Users() {
             email: "",
             password: "",
             full_name: "",
+            phone: "",
             role: "cashier",
             branch_id: "",
           });
@@ -190,6 +193,15 @@ export default function Users() {
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       placeholder="Min 6 characters"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Phone Number</Label>
+                    <Input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="+62 8xxx xxxx xxxx"
                     />
                   </div>
                   <div className="space-y-2">
@@ -333,9 +345,11 @@ export default function Users() {
                               <p className="font-medium text-foreground">
                                 {user.profile?.full_name || "Unknown"}
                               </p>
-                              <p className="text-sm text-muted-foreground">
-                                {user.profile?.phone || "No phone"}
-                              </p>
+                              {user.profile?.phone && (
+                                <p className="text-sm text-muted-foreground">
+                                  {user.profile.phone}
+                                </p>
+                              )}
                             </div>
                           </div>
                         </TableCell>
