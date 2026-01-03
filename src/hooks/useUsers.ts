@@ -21,6 +21,7 @@ interface CreateUserInput {
   email: string;
   password: string;
   full_name: string;
+  phone?: string;
   role: 'admin' | 'cashier';
   branch_id?: string;
 }
@@ -100,6 +101,7 @@ export function useCreateUser() {
           email: input.email,
           password: input.password,
           full_name: input.full_name,
+          phone: input.phone || null,
           role: input.role,
           business_id: business.id,
           branch_id: input.branch_id || null,
