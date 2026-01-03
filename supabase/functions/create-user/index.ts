@@ -39,53 +39,63 @@ serve(async (req) => {
     });
 
     // Get the authorization header from the request
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      console.error("No authorization header provided");
-      return new Response(
-        JSON.stringify({ error: "No authorization header" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization");
+    if (!authHeader || !authHeader.toLowerCase().startsWith("bearer ")) {
+      console.error("Missing/invalid Authorization header");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Verify user's token by making a request with their auth header
-    const token = authHeader.replace('Bearer ', '');
-    const { data: userData, error: authError } = await adminClient.auth.getUser(token);
-    
-    if (authError || !userData?.user) {
-      const errorMsg = authError ? String(authError) : "No user found";
-      console.error("Auth error:", errorMsg);
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: " + errorMsg }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Verify caller (must be authenticated)
+    const token = authHeader.split(" ")[1]?.trim();
+    if (!token) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
-    
+
+    const { data: userData, error: authError } = await adminClient.auth.getUser(token);
+    if (authError || !userData?.user) {
+      console.error("Auth error:", authError?.message ?? authError);
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const currentUser = userData.user;
     console.log("Authenticated user:", currentUser.id);
 
     // Parse request body with error handling
-    let body;
+    let body: any;
     try {
       const text = await req.text();
       if (!text || text.trim() === "") {
-        return new Response(
-          JSON.stringify({ error: "Empty request body" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        return new Response(JSON.stringify({ error: "Empty request body" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       body = JSON.parse(text);
     } catch (parseError) {
       console.error("JSON parse error:", parseError);
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON in request body" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Invalid JSON in request body" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const { email, password, full_name, role, business_id, branch_id } = body;
+    const email = typeof body?.email === "string" ? body.email.trim() : "";
+    const password = typeof body?.password === "string" ? body.password : "";
+    const role = typeof body?.role === "string" ? body.role.trim() : "";
+    const business_id = typeof body?.business_id === "string" ? body.business_id.trim() : "";
+    const full_name = typeof body?.full_name === "string" ? body.full_name.trim() : null;
+    const branch_id = typeof body?.branch_id === "string" && body.branch_id.trim() !== "" ? body.branch_id.trim() : null;
 
-    console.log("Creating user with params:", { email, role, business_id, branch_id: branch_id || null });
+    console.log("Creating user with params:", { email, role, business_id, branch_id });
 
     // Validate required fields
     if (!email || !password || !role || !business_id) {
@@ -96,92 +106,106 @@ serve(async (req) => {
     }
 
     // Validate role
-    if (!["admin", "cashier"].includes(role)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid role. Must be 'admin' or 'cashier'" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!['admin', 'cashier'].includes(role)) {
+      return new Response(JSON.stringify({ error: "Invalid role. Must be 'admin' or 'cashier'" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    // Check if current user has permission (must be owner of the business)
-    const { data: currentUserRole, error: roleError } = await adminClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", currentUser.id)
-      .eq("business_id", business_id)
-      .single();
+    // Permission check (MANDATORY): caller must own the business
+    const { data: business, error: businessError } = await adminClient
+      .from("businesses")
+      .select("id, owner_id")
+      .eq("id", business_id)
+      .maybeSingle();
 
-    if (roleError) {
-      console.error("Role check error:", roleError.message);
-      return new Response(
-        JSON.stringify({ error: "Failed to verify permissions: " + roleError.message }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (businessError) {
+      console.error("Business lookup error:", businessError.message);
+      return new Response(JSON.stringify({ error: "Failed to verify business" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    if (!currentUserRole || currentUserRole.role !== "owner") {
-      console.error("Permission denied: user is not owner", currentUserRole);
-      return new Response(
-        JSON.stringify({ error: "Only business owners can create users" }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!business) {
+      return new Response(JSON.stringify({ error: "Business not found" }), {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (business.owner_id !== currentUser.id) {
+      return new Response(JSON.stringify({ error: "Only business owners can create users" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log("Permission check passed, creating auth user...");
 
-    // Create the user using admin API
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+    // Create the user using admin API (service role)
+    const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
-      email_confirm: true, // Skip email confirmation
-      user_metadata: { full_name },
+      email_confirm: true,
+      ...(full_name ? { user_metadata: { full_name } } : {}),
     });
 
     if (createError) {
       console.error("Create user error:", createError.message);
-      return new Response(
-        JSON.stringify({ error: createError.message }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: createError.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log("Auth user created:", newUser.user.id);
-
-    // Create user role
-    const { error: userRoleError } = await adminClient
-      .from("user_roles")
-      .insert({
-        user_id: newUser.user.id,
-        business_id,
-        branch_id: branch_id || null,
-        role,
+    const newUserId = created?.user?.id;
+    if (!newUserId) {
+      console.error("Create user returned no user id");
+      return new Response(JSON.stringify({ error: "Failed to create user" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    console.log("Auth user created:", newUserId);
+
+    // Assign role in backend (service role bypasses RLS)
+    const { error: userRoleError } = await adminClient.from("user_roles").insert({
+      user_id: newUserId,
+      business_id,
+      branch_id,
+      role,
+    });
 
     if (userRoleError) {
-      console.error("User role error:", userRoleError.message);
-      // Rollback: delete the created user
-      await adminClient.auth.admin.deleteUser(newUser.user.id);
-      return new Response(
-        JSON.stringify({ error: "Failed to assign user role: " + userRoleError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.error("User role insert error:", userRoleError.message);
+      try {
+        await adminClient.auth.admin.deleteUser(newUserId);
+      } catch (rollbackErr) {
+        console.error("Rollback deleteUser failed:", rollbackErr);
+      }
+      return new Response(JSON.stringify({ error: "Failed to assign user role" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    console.log("User role created");
-
-    // Update profile with business and branch
-    const { error: profileError } = await adminClient
-      .from("profiles")
-      .update({
-        business_id,
-        branch_id: branch_id || null,
+    // Ensure a profile row exists (best-effort)
+    const { error: profileError } = await adminClient.from("profiles").upsert(
+      {
+        id: newUserId,
         full_name,
-      })
-      .eq("id", newUser.user.id);
+        business_id,
+        branch_id,
+      },
+      { onConflict: "id" }
+    );
 
     if (profileError) {
-      console.error("Profile update error:", profileError.message);
-      // Non-critical, continue
+      console.error("Profile upsert error:", profileError.message);
+      // non-critical
     }
 
     console.log("User creation completed successfully");
@@ -190,8 +214,8 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         user: {
-          id: newUser.user.id,
-          email: newUser.user.email,
+          id: newUserId,
+          email: created.user?.email ?? email,
           role,
         },
       }),

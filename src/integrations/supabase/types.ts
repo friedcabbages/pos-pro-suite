@@ -1154,6 +1154,10 @@ export type Database = {
       }
     }
     Functions: {
+      assign_user_role: {
+        Args: { p_business_id: string; p_role: string; p_user_id: string }
+        Returns: undefined
+      }
       get_user_business_id: { Args: never; Returns: string }
       has_branch_access: {
         Args: { _branch_id: string; _user_id: string }
