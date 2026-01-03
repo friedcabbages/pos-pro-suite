@@ -55,10 +55,14 @@ export default function Onboarding() {
     
     setLoading(true);
     try {
-      // 1. Create business
+      // 1. Create business with owner_id
       const { data: business, error: bizError } = await supabase
         .from("businesses")
-        .insert({ name: businessName, currency })
+        .insert({ 
+          name: businessName, 
+          currency,
+          owner_id: user.id 
+        })
         .select()
         .single();
 

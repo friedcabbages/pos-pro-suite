@@ -114,6 +114,7 @@ export type Database = {
           id: string
           logo_url: string | null
           name: string
+          owner_id: string | null
           phone: string | null
           tax_rate: number | null
           updated_at: string
@@ -126,6 +127,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name: string
+          owner_id?: string | null
           phone?: string | null
           tax_rate?: number | null
           updated_at?: string
@@ -138,6 +140,7 @@ export type Database = {
           id?: string
           logo_url?: string | null
           name?: string
+          owner_id?: string | null
           phone?: string | null
           tax_rate?: number | null
           updated_at?: string
