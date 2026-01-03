@@ -6,13 +6,23 @@ import { Inventory, InventoryLog } from '@/types/database';
 import { createAuditLog, logInventoryChange } from '@/lib/audit';
 import { toast } from 'sonner';
 
-export function useInventory() {
-  const { business, warehouse } = useBusiness();
+export function useInventory(warehouseFilter?: string) {
+  const { business } = useBusiness();
 
   return useQuery({
-    queryKey: ['inventory', business?.id, warehouse?.id],
+    queryKey: ['inventory', business?.id, warehouseFilter],
     queryFn: async () => {
       if (!business?.id) return [];
+
+      // First get warehouses for this business
+      const { data: businessWarehouses } = await supabase
+        .from('warehouses')
+        .select('id, branch:branches!inner(business_id)')
+        .eq('branches.business_id', business.id);
+
+      if (!businessWarehouses || businessWarehouses.length === 0) return [];
+
+      const warehouseIds = businessWarehouses.map(w => w.id);
 
       let query = supabase
         .from('inventory')
@@ -20,10 +30,12 @@ export function useInventory() {
           *,
           product:products(id, name, sku, cost_price, sell_price, min_stock, unit),
           warehouse:warehouses(id, name, branch:branches(id, name))
-        `);
+        `)
+        .in('warehouse_id', warehouseIds);
 
-      if (warehouse?.id) {
-        query = query.eq('warehouse_id', warehouse.id);
+      // Apply warehouse filter if specified (not 'all')
+      if (warehouseFilter && warehouseFilter !== 'all') {
+        query = query.eq('warehouse_id', warehouseFilter);
       }
 
       const { data, error } = await query;
@@ -35,13 +47,23 @@ export function useInventory() {
   });
 }
 
-export function useInventoryLogs(productId?: string) {
-  const { business, warehouse } = useBusiness();
+export function useInventoryLogs(productId?: string, warehouseFilter?: string) {
+  const { business } = useBusiness();
 
   return useQuery({
-    queryKey: ['inventory-logs', business?.id, warehouse?.id, productId],
+    queryKey: ['inventory-logs', business?.id, warehouseFilter, productId],
     queryFn: async () => {
       if (!business?.id) return [];
+
+      // First get warehouses for this business
+      const { data: businessWarehouses } = await supabase
+        .from('warehouses')
+        .select('id, branch:branches!inner(business_id)')
+        .eq('branches.business_id', business.id);
+
+      if (!businessWarehouses || businessWarehouses.length === 0) return [];
+
+      const warehouseIds = businessWarehouses.map(w => w.id);
 
       let query = supabase
         .from('inventory_logs')
@@ -50,11 +72,12 @@ export function useInventoryLogs(productId?: string) {
           product:products(id, name, sku),
           warehouse:warehouses(id, name)
         `)
+        .in('warehouse_id', warehouseIds)
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (warehouse?.id) {
-        query = query.eq('warehouse_id', warehouse.id);
+      if (warehouseFilter && warehouseFilter !== 'all') {
+        query = query.eq('warehouse_id', warehouseFilter);
       }
 
       if (productId) {
@@ -72,7 +95,7 @@ export function useInventoryLogs(productId?: string) {
 
 export function useAdjustStock() {
   const queryClient = useQueryClient();
-  const { business, warehouse } = useBusiness();
+  const { business } = useBusiness();
   const { user } = useAuth();
 
   return useMutation({
@@ -143,6 +166,8 @@ export function useAdjustStock() {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-logs'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      queryClient.invalidateQueries({ queryKey: ['available-stock'] });
       toast.success('Stock adjusted successfully');
     },
     onError: (error) => {
@@ -196,10 +221,12 @@ export function useTransferStock() {
       const destQty = destInv?.quantity || 0;
 
       // Update source
-      await supabase
-        .from('inventory')
-        .update({ quantity: sourceQty - quantity })
-        .eq('id', sourceInv!.id);
+      if (sourceInv) {
+        await supabase
+          .from('inventory')
+          .update({ quantity: sourceQty - quantity })
+          .eq('id', sourceInv.id);
+      }
 
       // Update or insert destination
       if (destInv) {
@@ -253,6 +280,8 @@ export function useTransferStock() {
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-logs'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['warehouses'] });
+      queryClient.invalidateQueries({ queryKey: ['available-stock'] });
       toast.success('Stock transferred successfully');
     },
     onError: (error) => {

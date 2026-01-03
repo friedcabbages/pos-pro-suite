@@ -97,8 +97,8 @@ export default function Inventory() {
   const [transferNotes, setTransferNotes] = useState("");
 
   const { business } = useBusiness();
-  const { data: inventory, isLoading } = useInventory();
-  const { data: logs, isLoading: logsLoading } = useInventoryLogs();
+  const { data: inventory, isLoading } = useInventory(selectedWarehouseFilter);
+  const { data: logs, isLoading: logsLoading } = useInventoryLogs(undefined, selectedWarehouseFilter);
   const { data: products } = useProducts();
   const { data: warehouses } = useWarehouses();
   const adjustStock = useAdjustStock();
@@ -111,14 +111,9 @@ export default function Inventory() {
   // Get available stock for transfer dialog (from warehouse)
   const { data: transferAvailableStock } = useAvailableStock(selectedProduct, fromWarehouse);
 
-  // Filter inventory by selected warehouse
+  // Filter inventory by search only (warehouse filter is now handled by the hook)
   const filteredInventory = useMemo(() => {
     let items = inventory || [];
-    
-    // Filter by warehouse if selected
-    if (selectedWarehouseFilter !== "all") {
-      items = items.filter((inv) => inv.warehouse_id === selectedWarehouseFilter);
-    }
     
     // Filter by search
     items = items.filter((inv) => {
@@ -131,7 +126,7 @@ export default function Inventory() {
     });
     
     return items;
-  }, [inventory, selectedWarehouseFilter, search]);
+  }, [inventory, search]);
 
   const lowStockItems = filteredInventory.filter((inv) => {
     const product = inv.product;
