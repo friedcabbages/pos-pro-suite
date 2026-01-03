@@ -78,14 +78,17 @@ export default function Users() {
   const deleteUser = useDeleteUser();
   const updateUserRole = useUpdateUserRole();
 
-  const filteredUsers = users?.filter(
-    (user) =>
-      user.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ?? false
-  ) || [];
-
+  // Counters are calculated from the full users list (before search filter)
   const ownerCount = users?.filter((u) => u.role === "owner").length || 0;
   const adminCount = users?.filter((u) => u.role === "admin").length || 0;
   const cashierCount = users?.filter((u) => u.role === "cashier").length || 0;
+
+  // Filter users based on search - include all users, even those without names
+  const filteredUsers = users?.filter((user) => {
+    if (!search.trim()) return true;
+    const name = user.profile?.full_name?.toLowerCase() || "";
+    return name.includes(search.toLowerCase());
+  }) || [];
 
   const handleCreate = () => {
     if (!formData.email.trim() || !formData.password.trim() || !formData.full_name.trim()) {
