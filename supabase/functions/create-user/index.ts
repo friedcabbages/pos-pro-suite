@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,15 +16,13 @@ serve(async (req) => {
     // Get environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
 
     console.log("Edge function called, checking env vars...");
 
-    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+    if (!supabaseUrl || !serviceRoleKey) {
       console.error("Missing environment variables:", {
         hasUrl: !!supabaseUrl,
         hasServiceKey: !!serviceRoleKey,
-        hasAnonKey: !!anonKey,
       });
       return new Response(
         JSON.stringify({ error: "Server configuration error: missing environment variables" }),
@@ -50,21 +48,20 @@ serve(async (req) => {
       );
     }
 
-    // Create a client with the user's token to verify permissions
-    const userClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    // Get the current user
-    const { data: { user: currentUser }, error: authError } = await userClient.auth.getUser();
-    if (authError || !currentUser) {
-      console.error("Auth error:", authError?.message);
+    // Verify user's token by making a request with their auth header
+    const token = authHeader.replace('Bearer ', '');
+    const { data: userData, error: authError } = await adminClient.auth.getUser(token);
+    
+    if (authError || !userData?.user) {
+      const errorMsg = authError ? String(authError) : "No user found";
+      console.error("Auth error:", errorMsg);
       return new Response(
-        JSON.stringify({ error: "Unauthorized: " + (authError?.message || "Invalid token") }),
+        JSON.stringify({ error: "Unauthorized: " + errorMsg }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
+    
+    const currentUser = userData.user;
     console.log("Authenticated user:", currentUser.id);
 
     // Parse request body with error handling
