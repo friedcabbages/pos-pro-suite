@@ -33,32 +33,52 @@ export function useUsers() {
     queryFn: async () => {
       if (!business?.id) return [];
 
-      const { data, error } = await supabase
+      // Fetch user_roles for the current business
+      const { data: rolesData, error: rolesError } = await supabase
         .from('user_roles')
         .select('id, user_id, role, branch_id')
         .eq('business_id', business.id);
 
-      if (error) throw error;
+      if (rolesError) throw rolesError;
+      if (!rolesData || rolesData.length === 0) return [];
 
-      if (!data || data.length === 0) return [];
-
-      // Fetch profiles for each user
-      const userIds = data.map((u) => u.user_id);
-      const { data: profiles } = await supabase
+      // Fetch profiles for all user_ids
+      const userIds = rolesData.map((u) => u.user_id);
+      const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name, phone')
         .in('id', userIds);
 
-      // Fetch branches
-      const branchIds = data.filter((u) => u.branch_id).map((u) => u.branch_id!);
-      const { data: branches } = branchIds.length > 0
-        ? await supabase.from('branches').select('id, name').in('id', branchIds)
-        : { data: [] };
+      if (profilesError) console.error('Error fetching profiles:', profilesError);
 
-      const usersWithData: UserWithRole[] = data.map((user) => ({
-        ...user,
-        profile: profiles?.find((p) => p.id === user.user_id),
-        branch: branches?.find((b) => b.id === user.branch_id),
+      // Fetch branches for users with branch_id
+      const branchIds = rolesData
+        .filter((u) => u.branch_id)
+        .map((u) => u.branch_id as string);
+      
+      let branches: { id: string; name: string }[] = [];
+      if (branchIds.length > 0) {
+        const { data: branchesData, error: branchesError } = await supabase
+          .from('branches')
+          .select('id, name')
+          .in('id', branchIds);
+        
+        if (branchesError) console.error('Error fetching branches:', branchesError);
+        branches = branchesData || [];
+      }
+
+      // Map profiles and branches by id for O(1) lookup
+      const profilesMap = new Map(profiles?.map((p) => [p.id, p]) || []);
+      const branchesMap = new Map(branches.map((b) => [b.id, b]));
+
+      // Build the final users array
+      const usersWithData: UserWithRole[] = rolesData.map((role) => ({
+        id: role.id,
+        user_id: role.user_id,
+        role: role.role as 'owner' | 'admin' | 'cashier',
+        branch_id: role.branch_id,
+        profile: profilesMap.get(role.user_id) || { full_name: null, phone: null },
+        branch: role.branch_id ? branchesMap.get(role.branch_id) : undefined,
       }));
 
       return usersWithData;
