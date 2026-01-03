@@ -11,4 +11,5 @@ max_rows = 1000
 enabled = true
 
 [functions.create-user]
-verify_jwt = true
+verify_jwt = false
+
