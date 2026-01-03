@@ -42,7 +42,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useProducts, useCreateProduct, useDeleteProduct } from "@/hooks/useProducts";
+import { useProducts, useCreateProduct, useDeleteProduct, useUpdateProduct } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -60,24 +60,40 @@ const statusLabels = {
   out_of_stock: "Out of Stock",
 };
 
+interface ProductFormData {
+  name: string;
+  sku: string;
+  category_id: string;
+  unit: string;
+  cost_price: number;
+  sell_price: number;
+  min_stock: number;
+}
+
+const defaultFormData: ProductFormData = {
+  name: "",
+  sku: "",
+  category_id: "",
+  unit: "pcs",
+  cost_price: 0,
+  sell_price: 0,
+  min_stock: 0,
+};
+
 export default function Products() {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    sku: "",
-    category_id: "",
-    unit: "pcs",
-    cost_price: 0,
-    sell_price: 0,
-    min_stock: 0,
-  });
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(null);
+  const [formData, setFormData] = useState<ProductFormData>(defaultFormData);
 
   const { business } = useBusiness();
   const { data: products, isLoading } = useProducts();
   const { data: categories } = useCategories();
   const createProduct = useCreateProduct();
+  const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
   const { toast } = useToast();
 
@@ -97,7 +113,6 @@ export default function Products() {
     if (stock <= minStock) return "low_stock";
     return "in_stock";
   };
-
 
   const getCategoryIcon = (categoryName?: string) => {
     if (!categoryName) return "📦";
@@ -125,22 +140,61 @@ export default function Products() {
       min_stock: formData.min_stock,
     }, {
       onSuccess: () => {
-        setIsDialogOpen(false);
-        setFormData({
-          name: "",
-          sku: "",
-          category_id: "",
-          unit: "pcs",
-          cost_price: 0,
-          sell_price: 0,
-          min_stock: 0,
-        });
+        setIsCreateOpen(false);
+        setFormData(defaultFormData);
         toast({ title: "Product created successfully" });
       },
       onError: (error: any) => {
         toast({ title: "Failed to create product", description: error.message, variant: "destructive" });
       },
     });
+  };
+
+  const handleEdit = async () => {
+    if (!formData.name.trim() || !selectedProduct) {
+      toast({ title: "Name required", variant: "destructive" });
+      return;
+    }
+    
+    updateProduct.mutate({
+      id: selectedProduct.id,
+      name: formData.name,
+      sku: formData.sku || null,
+      category_id: formData.category_id || null,
+      unit: formData.unit,
+      cost_price: formData.cost_price,
+      sell_price: formData.sell_price,
+      min_stock: formData.min_stock,
+    }, {
+      onSuccess: () => {
+        setIsEditOpen(false);
+        setSelectedProduct(null);
+        setFormData(defaultFormData);
+        toast({ title: "Product updated successfully" });
+      },
+      onError: (error: any) => {
+        toast({ title: "Failed to update product", description: error.message, variant: "destructive" });
+      },
+    });
+  };
+
+  const openEditDialog = (product: any) => {
+    setSelectedProduct(product);
+    setFormData({
+      name: product.name,
+      sku: product.sku || "",
+      category_id: product.category_id || "",
+      unit: product.unit || "pcs",
+      cost_price: product.cost_price || 0,
+      sell_price: product.sell_price || 0,
+      min_stock: product.min_stock || 0,
+    });
+    setIsEditOpen(true);
+  };
+
+  const openViewDialog = (product: any) => {
+    setSelectedProduct(product);
+    setIsViewOpen(true);
   };
 
   const handleDelete = (id: string) => {
@@ -150,6 +204,45 @@ export default function Products() {
         onError: (error: any) => toast({ title: "Failed to delete", description: error.message, variant: "destructive" }),
       });
     }
+  };
+
+  const handleExport = () => {
+    if (filteredProducts.length === 0) {
+      toast({ title: "No products to export", variant: "destructive" });
+      return;
+    }
+
+    // Build CSV content
+    const headers = ["Name", "SKU", "Category", "Unit", "Cost Price", "Sell Price", "Stock", "Min Stock", "Status"];
+    const rows = filteredProducts.map((product) => {
+      const category = categories?.find(c => c.id === product.category_id);
+      const stock = product.total_stock ?? 0;
+      const status = getProductStatus(product);
+      return [
+        `"${product.name}"`,
+        product.sku || "",
+        category?.name || "",
+        product.unit || "pcs",
+        product.cost_price,
+        product.sell_price,
+        stock,
+        product.min_stock || 0,
+        statusLabels[status],
+      ].join(",");
+    });
+
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `products_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    
+    toast({ title: `Exported ${filteredProducts.length} products` });
   };
 
   const formatCurrency = (value: number) => {
@@ -174,7 +267,7 @@ export default function Products() {
               Manage your product inventory and pricing
             </p>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
             <DialogTrigger asChild>
               <Button variant="glow">
                 <Plus className="mr-2 h-4 w-4" />
@@ -289,7 +382,7 @@ export default function Products() {
               ))}
             </SelectContent>
           </Select>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport}>
             <Download className="mr-2 h-4 w-4" />
             Export
           </Button>
@@ -381,11 +474,11 @@ export default function Products() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openViewDialog(product)}>
                                 <Eye className="mr-2 h-4 w-4" />
                                 View
                               </DropdownMenuItem>
-                              <DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEditDialog(product)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
@@ -407,6 +500,174 @@ export default function Products() {
             </Table>
           )}
         </div>
+
+        {/* View Dialog */}
+        <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Product Details</DialogTitle>
+            </DialogHeader>
+            {selectedProduct && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-secondary text-2xl">
+                    {getCategoryIcon(categories?.find(c => c.id === selectedProduct.category_id)?.name)}
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold">{selectedProduct.name}</h3>
+                    {selectedProduct.sku && (
+                      <p className="text-sm text-muted-foreground font-mono">{selectedProduct.sku}</p>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">Category</p>
+                    <p className="font-medium">{categories?.find(c => c.id === selectedProduct.category_id)?.name || "-"}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">Unit</p>
+                    <p className="font-medium">{selectedProduct.unit || "pcs"}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">Cost Price</p>
+                    <p className="font-medium">{formatCurrency(selectedProduct.cost_price)}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">Sell Price</p>
+                    <p className="font-medium text-primary">{formatCurrency(selectedProduct.sell_price)}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">Current Stock</p>
+                    <p className="font-medium">{selectedProduct.total_stock ?? 0} {selectedProduct.unit || "pcs"}</p>
+                  </div>
+                  <div className="rounded-lg bg-muted/50 p-3">
+                    <p className="text-xs text-muted-foreground">Min Stock</p>
+                    <p className="font-medium">{selectedProduct.min_stock || 0}</p>
+                  </div>
+                </div>
+                
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button variant="outline" onClick={() => setIsViewOpen(false)}>
+                    Close
+                  </Button>
+                  <Button onClick={() => {
+                    setIsViewOpen(false);
+                    openEditDialog(selectedProduct);
+                  }}>
+                    <Edit className="mr-2 h-4 w-4" />
+                    Edit Product
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Dialog */}
+        <Dialog open={isEditOpen} onOpenChange={(open) => {
+          setIsEditOpen(open);
+          if (!open) {
+            setSelectedProduct(null);
+            setFormData(defaultFormData);
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Product</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Product Name *</Label>
+                <Input
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  placeholder="Product name"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>SKU</Label>
+                  <Input
+                    value={formData.sku}
+                    onChange={(e) => setFormData({ ...formData, sku: e.target.value })}
+                    placeholder="SKU-001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Unit</Label>
+                  <Select value={formData.unit} onValueChange={(v) => setFormData({ ...formData, unit: v })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pcs">Pieces</SelectItem>
+                      <SelectItem value="kg">Kilogram</SelectItem>
+                      <SelectItem value="ltr">Liter</SelectItem>
+                      <SelectItem value="box">Box</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={formData.category_id} onValueChange={(v) => setFormData({ ...formData, category_id: v })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories?.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Cost Price</Label>
+                  <Input
+                    type="number"
+                    value={formData.cost_price}
+                    onChange={(e) => setFormData({ ...formData, cost_price: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Sell Price</Label>
+                  <Input
+                    type="number"
+                    value={formData.sell_price}
+                    onChange={(e) => setFormData({ ...formData, sell_price: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Minimum Stock</Label>
+                <Input
+                  type="number"
+                  value={formData.min_stock}
+                  onChange={(e) => setFormData({ ...formData, min_stock: Number(e.target.value) })}
+                />
+              </div>
+              
+              {/* Read-only stock display */}
+              {selectedProduct && (
+                <div className="rounded-lg bg-muted/50 p-3 border border-border">
+                  <p className="text-xs text-muted-foreground">Current Stock (read-only)</p>
+                  <p className="font-medium">{selectedProduct.total_stock ?? 0} {selectedProduct.unit || "pcs"}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    To adjust stock, use the Inventory page
+                  </p>
+                </div>
+              )}
+              
+              <Button onClick={handleEdit} className="w-full" disabled={updateProduct.isPending}>
+                {updateProduct.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update Product
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

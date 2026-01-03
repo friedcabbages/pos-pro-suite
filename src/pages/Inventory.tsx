@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ import {
   Loader2,
   Package,
   AlertTriangle,
+  Warehouse,
 } from "lucide-react";
 import { useInventory, useInventoryLogs, useAdjustStock, useTransferStock } from "@/hooks/useInventory";
 import { useProducts } from "@/hooks/useProducts";
@@ -49,6 +50,8 @@ import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 const actionStyles: Record<string, string> = {
   stock_in: "bg-success/10 text-success",
@@ -59,11 +62,33 @@ const actionStyles: Record<string, string> = {
   sale: "bg-destructive/10 text-destructive",
 };
 
+// Hook to get available stock for a product in a specific warehouse
+function useAvailableStock(productId: string, warehouseId: string) {
+  return useQuery({
+    queryKey: ['available-stock', productId, warehouseId],
+    queryFn: async () => {
+      if (!productId || !warehouseId) return 0;
+      
+      const { data } = await supabase
+        .from('inventory')
+        .select('quantity')
+        .eq('product_id', productId)
+        .eq('warehouse_id', warehouseId)
+        .maybeSingle();
+      
+      return data?.quantity || 0;
+    },
+    enabled: !!productId && !!warehouseId
+  });
+}
+
 export default function Inventory() {
   const [search, setSearch] = useState("");
+  const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState<string>("all");
   const [isAdjustOpen, setIsAdjustOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState("");
+  const [adjustWarehouse, setAdjustWarehouse] = useState("");
   const [adjustmentQty, setAdjustmentQty] = useState(0);
   const [adjustmentReason, setAdjustmentReason] = useState("");
   const [transferQty, setTransferQty] = useState(1);
@@ -71,7 +96,7 @@ export default function Inventory() {
   const [toWarehouse, setToWarehouse] = useState("");
   const [transferNotes, setTransferNotes] = useState("");
 
-  const { business, warehouse } = useBusiness();
+  const { business } = useBusiness();
   const { data: inventory, isLoading } = useInventory();
   const { data: logs, isLoading: logsLoading } = useInventoryLogs();
   const { data: products } = useProducts();
@@ -80,14 +105,33 @@ export default function Inventory() {
   const transferStock = useTransferStock();
   const { toast } = useToast();
 
-  const filteredInventory = inventory?.filter((inv) => {
-    const product = inv.product;
-    if (!product) return false;
-    return (
-      product.name.toLowerCase().includes(search.toLowerCase()) ||
-      (product.sku?.toLowerCase().includes(search.toLowerCase()) ?? false)
-    );
-  }) || [];
+  // Get available stock for adjustment dialog
+  const { data: adjustAvailableStock } = useAvailableStock(selectedProduct, adjustWarehouse);
+  
+  // Get available stock for transfer dialog (from warehouse)
+  const { data: transferAvailableStock } = useAvailableStock(selectedProduct, fromWarehouse);
+
+  // Filter inventory by selected warehouse
+  const filteredInventory = useMemo(() => {
+    let items = inventory || [];
+    
+    // Filter by warehouse if selected
+    if (selectedWarehouseFilter !== "all") {
+      items = items.filter((inv) => inv.warehouse_id === selectedWarehouseFilter);
+    }
+    
+    // Filter by search
+    items = items.filter((inv) => {
+      const product = inv.product;
+      if (!product) return false;
+      return (
+        product.name.toLowerCase().includes(search.toLowerCase()) ||
+        (product.sku?.toLowerCase().includes(search.toLowerCase()) ?? false)
+      );
+    });
+    
+    return items;
+  }, [inventory, selectedWarehouseFilter, search]);
 
   const lowStockItems = filteredInventory.filter((inv) => {
     const product = inv.product;
@@ -96,7 +140,7 @@ export default function Inventory() {
   });
 
   const handleAdjust = () => {
-    if (!selectedProduct || !warehouse?.id) {
+    if (!selectedProduct || !adjustWarehouse) {
       toast({ title: "Select product and warehouse", variant: "destructive" });
       return;
     }
@@ -104,16 +148,24 @@ export default function Inventory() {
       toast({ title: "Adjustment cannot be zero", variant: "destructive" });
       return;
     }
+    
+    // Validate that adjustment won't make stock negative
+    const newStock = (adjustAvailableStock || 0) + adjustmentQty;
+    if (newStock < 0) {
+      toast({ title: "Adjustment would result in negative stock", variant: "destructive" });
+      return;
+    }
 
     adjustStock.mutate({
       product_id: selectedProduct,
-      warehouse_id: warehouse.id,
+      warehouse_id: adjustWarehouse,
       adjustment: adjustmentQty,
       reason: adjustmentReason || "Manual adjustment"
     }, {
       onSuccess: () => {
         setIsAdjustOpen(false);
         setSelectedProduct("");
+        setAdjustWarehouse("");
         setAdjustmentQty(0);
         setAdjustmentReason("");
       }
@@ -127,6 +179,14 @@ export default function Inventory() {
     }
     if (fromWarehouse === toWarehouse) {
       toast({ title: "Cannot transfer to same warehouse", variant: "destructive" });
+      return;
+    }
+    if (transferQty <= 0) {
+      toast({ title: "Quantity must be greater than 0", variant: "destructive" });
+      return;
+    }
+    if (transferQty > (transferAvailableStock || 0)) {
+      toast({ title: `Insufficient stock. Available: ${transferAvailableStock}`, variant: "destructive" });
       return;
     }
 
@@ -163,6 +223,8 @@ export default function Inventory() {
     return sum + (inv.quantity * product.cost_price);
   }, 0);
 
+  const selectedProductUnit = products?.find(p => p.id === selectedProduct)?.unit || 'pcs';
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -177,7 +239,16 @@ export default function Inventory() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+            <Dialog open={isTransferOpen} onOpenChange={(open) => {
+              setIsTransferOpen(open);
+              if (!open) {
+                setSelectedProduct("");
+                setFromWarehouse("");
+                setToWarehouse("");
+                setTransferQty(1);
+                setTransferNotes("");
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button variant="outline">
                   <ArrowRightLeft className="mr-2 h-4 w-4" />
@@ -191,7 +262,10 @@ export default function Inventory() {
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label>Product *</Label>
-                    <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                    <Select value={selectedProduct} onValueChange={(v) => {
+                      setSelectedProduct(v);
+                      setTransferQty(1);
+                    }}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select product" />
                       </SelectTrigger>
@@ -205,7 +279,11 @@ export default function Inventory() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>From Warehouse *</Label>
-                      <Select value={fromWarehouse} onValueChange={setFromWarehouse}>
+                      <Select value={fromWarehouse} onValueChange={(v) => {
+                        setFromWarehouse(v);
+                        if (v === toWarehouse) setToWarehouse("");
+                        setTransferQty(1);
+                      }}>
                         <SelectTrigger>
                           <SelectValue placeholder="Source" />
                         </SelectTrigger>
@@ -230,14 +308,30 @@ export default function Inventory() {
                       </Select>
                     </div>
                   </div>
+                  
+                  {/* Available Stock Display */}
+                  {selectedProduct && fromWarehouse && (
+                    <div className="rounded-lg bg-muted/50 p-3 border border-border">
+                      <p className="text-sm text-muted-foreground">
+                        Available in source: <span className="font-semibold text-foreground">{transferAvailableStock || 0} {selectedProductUnit}</span>
+                      </p>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     <Label>Quantity *</Label>
                     <Input
                       type="number"
                       min="1"
+                      max={transferAvailableStock || undefined}
                       value={transferQty}
                       onChange={(e) => setTransferQty(Number(e.target.value))}
                     />
+                    {transferQty > (transferAvailableStock || 0) && selectedProduct && fromWarehouse && (
+                      <p className="text-xs text-destructive">
+                        Exceeds available stock
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Notes</Label>
@@ -247,7 +341,11 @@ export default function Inventory() {
                       placeholder="Reason for transfer..."
                     />
                   </div>
-                  <Button onClick={handleTransfer} className="w-full" disabled={transferStock.isPending}>
+                  <Button 
+                    onClick={handleTransfer} 
+                    className="w-full" 
+                    disabled={transferStock.isPending || transferQty > (transferAvailableStock || 0) || transferQty <= 0}
+                  >
                     {transferStock.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Transfer Stock
                   </Button>
@@ -255,7 +353,15 @@ export default function Inventory() {
               </DialogContent>
             </Dialog>
 
-            <Dialog open={isAdjustOpen} onOpenChange={setIsAdjustOpen}>
+            <Dialog open={isAdjustOpen} onOpenChange={(open) => {
+              setIsAdjustOpen(open);
+              if (!open) {
+                setSelectedProduct("");
+                setAdjustWarehouse("");
+                setAdjustmentQty(0);
+                setAdjustmentReason("");
+              }
+            }}>
               <DialogTrigger asChild>
                 <Button variant="glow">
                   <Plus className="mr-2 h-4 w-4" />
@@ -268,8 +374,27 @@ export default function Inventory() {
                 </DialogHeader>
                 <div className="space-y-4">
                   <div className="space-y-2">
+                    <Label>Warehouse *</Label>
+                    <Select value={adjustWarehouse} onValueChange={(v) => {
+                      setAdjustWarehouse(v);
+                      setAdjustmentQty(0);
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select warehouse" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {warehouses?.map((w) => (
+                          <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
                     <Label>Product *</Label>
-                    <Select value={selectedProduct} onValueChange={setSelectedProduct}>
+                    <Select value={selectedProduct} onValueChange={(v) => {
+                      setSelectedProduct(v);
+                      setAdjustmentQty(0);
+                    }}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select product" />
                       </SelectTrigger>
@@ -280,6 +405,16 @@ export default function Inventory() {
                       </SelectContent>
                     </Select>
                   </div>
+                  
+                  {/* Available Stock Display */}
+                  {selectedProduct && adjustWarehouse && (
+                    <div className="rounded-lg bg-muted/50 p-3 border border-border">
+                      <p className="text-sm text-muted-foreground">
+                        Current stock: <span className="font-semibold text-foreground">{adjustAvailableStock || 0} {selectedProductUnit}</span>
+                      </p>
+                    </div>
+                  )}
+                  
                   <div className="space-y-2">
                     <Label>Adjustment (+ or -)</Label>
                     <div className="flex gap-2">
@@ -288,6 +423,7 @@ export default function Inventory() {
                         variant="outline"
                         size="icon"
                         onClick={() => setAdjustmentQty(prev => prev - 1)}
+                        disabled={(adjustAvailableStock || 0) + adjustmentQty - 1 < 0}
                       >
                         <Minus className="h-4 w-4" />
                       </Button>
@@ -309,6 +445,16 @@ export default function Inventory() {
                     <p className="text-xs text-muted-foreground">
                       Positive = add stock, Negative = remove stock
                     </p>
+                    {selectedProduct && adjustWarehouse && (
+                      <p className="text-xs text-muted-foreground">
+                        Result: {(adjustAvailableStock || 0) + adjustmentQty} {selectedProductUnit}
+                      </p>
+                    )}
+                    {(adjustAvailableStock || 0) + adjustmentQty < 0 && (
+                      <p className="text-xs text-destructive">
+                        Cannot have negative stock
+                      </p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label>Reason *</Label>
@@ -318,7 +464,11 @@ export default function Inventory() {
                       placeholder="Reason for adjustment..."
                     />
                   </div>
-                  <Button onClick={handleAdjust} className="w-full" disabled={adjustStock.isPending}>
+                  <Button 
+                    onClick={handleAdjust} 
+                    className="w-full" 
+                    disabled={adjustStock.isPending || (adjustAvailableStock || 0) + adjustmentQty < 0}
+                  >
                     {adjustStock.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Apply Adjustment
                   </Button>
@@ -373,16 +523,30 @@ export default function Inventory() {
           </TabsList>
 
           <TabsContent value="stock" className="space-y-4">
-            {/* Search */}
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search by product name or SKU..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-10"
-              />
+            {/* Filters */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search by product name or SKU..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <Select value={selectedWarehouseFilter} onValueChange={setSelectedWarehouseFilter}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <Warehouse className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Filter by warehouse" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Warehouses</SelectItem>
+                  {warehouses?.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Inventory Table */}
@@ -456,6 +620,7 @@ export default function Inventory() {
                   <TableRow>
                     <TableHead>Product</TableHead>
                     <TableHead>SKU</TableHead>
+                    <TableHead>Warehouse</TableHead>
                     <TableHead className="text-right">Current</TableHead>
                     <TableHead className="text-right">Min Stock</TableHead>
                     <TableHead className="text-right">Deficit</TableHead>
@@ -465,7 +630,7 @@ export default function Inventory() {
                 <TableBody>
                   {lowStockItems.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         No low stock items
                       </TableCell>
                     </TableRow>
@@ -480,6 +645,7 @@ export default function Inventory() {
                           <TableCell className="font-mono text-sm text-muted-foreground">
                             {product.sku || "-"}
                           </TableCell>
+                          <TableCell>{inv.warehouse?.name || "-"}</TableCell>
                           <TableCell className="text-right font-semibold text-destructive">
                             {inv.quantity}
                           </TableCell>
@@ -495,6 +661,7 @@ export default function Inventory() {
                               variant="outline"
                               onClick={() => {
                                 setSelectedProduct(product.id);
+                                setAdjustWarehouse(inv.warehouse_id);
                                 setAdjustmentQty(deficit);
                                 setIsAdjustOpen(true);
                               }}
