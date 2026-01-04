@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +24,8 @@ import { Download, TrendingUp, DollarSign, Receipt, Package } from "lucide-react
 import { useSalesChart, useTopProducts, useDashboardStats } from "@/hooks/useDashboard";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
+import { toast } from "sonner";
 
 const categoryColors = [
   "hsl(160 84% 45%)",
@@ -33,6 +36,8 @@ const categoryColors = [
 ];
 
 export default function Reports() {
+  const [period, setPeriod] = useState("month");
+  const [isExporting, setIsExporting] = useState(false);
   const { data: salesChart, isLoading: chartLoading } = useSalesChart();
   const { data: topProducts, isLoading: productsLoading } = useTopProducts();
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
@@ -47,6 +52,57 @@ export default function Reports() {
       currency,
       minimumFractionDigits: 0,
     }).format(value);
+  };
+
+  const periodLabels: Record<string, string> = {
+    week: "This Week",
+    month: "This Month",
+    quarter: "This Quarter",
+    year: "This Year",
+  };
+
+  const handleExport = () => {
+    setIsExporting(true);
+    try {
+      const rows = [
+        ["Report Summary", format(new Date(), "yyyy-MM-dd HH:mm:ss")],
+        ["Period", periodLabels[period]],
+        [""],
+        ["Metric", "Value"],
+        ["Monthly Revenue", formatCurrency(stats?.monthlyRevenue || 0)],
+        ["Monthly Profit", formatCurrency(stats?.monthlyProfit || 0)],
+        ["Today's Sales", formatCurrency(stats?.todaySales || 0)],
+        ["Today's Profit", formatCurrency(stats?.todayProfit || 0)],
+        ["Total Orders Today", (stats?.totalOrders || 0).toString()],
+        ["Total Active Products", (stats?.totalProducts || 0).toString()],
+        [""],
+        ["Sales Trend (Last 7 Days)"],
+        ["Date", "Sales"],
+        ...(salesChart?.map((d) => [d.date, d.sales.toString()]) || []),
+        [""],
+        ["Top Products by Revenue"],
+        ["Product", "Quantity Sold", "Revenue"],
+        ...(topProducts?.map((p) => [p.name, p.quantity.toString(), formatCurrency(p.revenue)]) || []),
+      ];
+
+      const csvContent = rows.map((row) => row.map((cell) => `"${cell}"`).join(",")).join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `reports_${format(new Date(), "yyyy-MM-dd")}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Report exported successfully");
+    } catch (error) {
+      toast.error("Failed to export report");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   // Get top products for pie chart
@@ -72,7 +128,7 @@ export default function Reports() {
             </p>
           </div>
           <div className="flex gap-2">
-            <Select defaultValue="month">
+            <Select value={period} onValueChange={setPeriod}>
               <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -83,9 +139,9 @@ export default function Reports() {
                 <SelectItem value="year">This Year</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline">
+            <Button variant="outline" onClick={handleExport} disabled={isExporting || isLoading}>
               <Download className="mr-2 h-4 w-4" />
-              Export
+              {isExporting ? "Exporting..." : "Export"}
             </Button>
           </div>
         </div>

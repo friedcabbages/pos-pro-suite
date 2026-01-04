@@ -216,11 +216,16 @@ export function useCreateSale() {
       return sale;
     },
     onSuccess: () => {
+      // Invalidate all dashboard-related queries for real-time updates
       queryClient.invalidateQueries({ queryKey: ['sales'] });
       queryClient.invalidateQueries({ queryKey: ['today-sales'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['inventory'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['low-stock'] });
+      queryClient.invalidateQueries({ queryKey: ['top-products'] });
+      queryClient.invalidateQueries({ queryKey: ['sales-chart'] });
+      queryClient.invalidateQueries({ queryKey: ['recent-transactions'] });
       toast.success('Sale completed successfully');
     },
     onError: (error) => {

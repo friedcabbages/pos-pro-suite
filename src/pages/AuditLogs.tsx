@@ -30,6 +30,7 @@ import { useAuditLogs, useAuditLogStats } from "@/hooks/useAuditLogs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
 import { AuditLog } from "@/types/database";
+import { toast } from "sonner";
 
 const actionStyles: Record<string, string> = {
   create: "bg-success/10 text-success",
@@ -61,6 +62,7 @@ export default function AuditLogs() {
   const [entityFilter, setEntityFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [selectedLog, setSelectedLog] = useState<AuditLog | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
   const { data: logs, isLoading } = useAuditLogs({
     entity_type: entityFilter !== "all" ? entityFilter : undefined,
@@ -84,6 +86,46 @@ export default function AuditLogs() {
     return "bg-muted text-muted-foreground";
   };
 
+  const handleExport = () => {
+    if (filteredLogs.length === 0) {
+      toast.error("No audit logs to export");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const headers = ["Timestamp", "Entity", "Action", "Entity ID", "Changes"];
+      const rows = filteredLogs.map((log) => [
+        format(new Date(log.created_at), "yyyy-MM-dd HH:mm:ss"),
+        log.entity_type,
+        log.action.replace(/_/g, " "),
+        log.entity_id || "-",
+        log.old_value ? "Modified" : log.new_value ? "Created" : "-",
+      ]);
+
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `audit_logs_${format(new Date(), "yyyy-MM-dd")}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Audit logs exported successfully");
+    } catch (error) {
+      toast.error("Failed to export audit logs");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -97,9 +139,9 @@ export default function AuditLogs() {
               Track all system activities and changes
             </p>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport} disabled={isExporting}>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            {isExporting ? "Exporting..." : "Export"}
           </Button>
         </div>
 

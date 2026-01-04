@@ -1,57 +1,74 @@
-import { AlertTriangle, Package } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const lowStockItems = [
-  { name: "Coffee Beans Premium", current: 5, minimum: 20, unit: "kg" },
-  { name: "Sugar White", current: 8, minimum: 50, unit: "kg" },
-  { name: "Milk Fresh 1L", current: 12, minimum: 30, unit: "pcs" },
-  { name: "Flour All Purpose", current: 3, minimum: 25, unit: "kg" },
-];
+import { Progress } from "@/components/ui/progress";
+import { useLowStockProducts } from "@/hooks/useDashboard";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useNavigate } from "react-router-dom";
 
 export function LowStockAlert() {
+  const { data: lowStockItems, isLoading } = useLowStockProducts();
+  const navigate = useNavigate();
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+        <Skeleton className="h-6 w-32 mb-4" />
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-lg border border-warning/30 bg-warning/5 p-5">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-card h-full">
       <div className="mb-4 flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-md bg-warning/10">
-          <AlertTriangle className="h-4 w-4 text-warning" />
-        </div>
-        <div>
-          <h3 className="text-base font-semibold text-foreground">Low Stock Alert</h3>
-          <p className="text-sm text-muted-foreground">{lowStockItems.length} items need attention</p>
-        </div>
+        <AlertTriangle className="h-5 w-5 text-warning" />
+        <h3 className="text-lg font-semibold text-foreground">Low Stock Alert</h3>
       </div>
 
-      <div className="space-y-2">
-        {lowStockItems.map((item) => {
-          const percentage = (item.current / item.minimum) * 100;
-          return (
-            <div
-              key={item.name}
-              className="flex items-center gap-3 rounded-md bg-card p-3"
-            >
-              <Package className="h-4 w-4 text-warning" />
-              <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium text-foreground">
-                  {item.name}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {item.current} / {item.minimum} {item.unit}
-                </p>
-              </div>
-              <div className="h-1.5 w-16 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full bg-warning transition-all"
-                  style={{ width: `${percentage}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      {!lowStockItems || lowStockItems.length === 0 ? (
+        <div className="flex h-[200px] items-center justify-center text-muted-foreground">
+          All products are well stocked
+        </div>
+      ) : (
+        <>
+          <div className="space-y-4 mb-4">
+            {lowStockItems.slice(0, 5).map((item) => {
+              const current = item.current_stock || 0;
+              const min = item.min_stock || 1;
+              const percentage = Math.min((current / min) * 100, 100);
 
-      <Button variant="outline" size="sm" className="mt-4 w-full">
-        View Inventory
-      </Button>
+              return (
+                <div key={`${item.product_id}-${item.warehouse_id}`} className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium text-foreground truncate max-w-[150px]">
+                      {item.product_name}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      {current} / {min}
+                    </span>
+                  </div>
+                  <Progress 
+                    value={percentage} 
+                    className="h-2"
+                  />
+                  <p className="text-xs text-muted-foreground">{item.warehouse_name}</p>
+                </div>
+              );
+            })}
+          </div>
+          <Button 
+            variant="outline" 
+            className="w-full" 
+            onClick={() => navigate("/inventory")}
+          >
+            View Inventory
+          </Button>
+        </>
+      )}
     </div>
   );
 }
