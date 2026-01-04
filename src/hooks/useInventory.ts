@@ -168,6 +168,9 @@ export function useAdjustStock() {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
       queryClient.invalidateQueries({ queryKey: ['available-stock'] });
+      // Invalidate dashboard queries for real-time updates
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['low-stock'] });
       toast.success('Stock adjusted successfully');
     },
     onError: (error) => {
@@ -282,6 +285,9 @@ export function useTransferStock() {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['warehouses'] });
       queryClient.invalidateQueries({ queryKey: ['available-stock'] });
+      // Invalidate dashboard queries for real-time updates
+      queryClient.invalidateQueries({ queryKey: ['dashboard-stats'] });
+      queryClient.invalidateQueries({ queryKey: ['low-stock'] });
       toast.success('Stock transferred successfully');
     },
     onError: (error) => {

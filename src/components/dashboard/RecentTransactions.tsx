@@ -1,96 +1,86 @@
-import { Receipt } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { useRecentTransactions } from "@/hooks/useDashboard";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
+import { useNavigate } from "react-router-dom";
 
-const transactions = [
-  {
-    id: "TXN-001",
-    customer: "Walk-in Customer",
-    amount: "$125.50",
-    items: 5,
-    status: "completed",
-    time: "2 min ago",
-  },
-  {
-    id: "TXN-002",
-    customer: "John Smith",
-    amount: "$89.00",
-    items: 3,
-    status: "completed",
-    time: "15 min ago",
-  },
-  {
-    id: "TXN-003",
-    customer: "Maria Garcia",
-    amount: "$234.75",
-    items: 8,
-    status: "pending",
-    time: "32 min ago",
-  },
-  {
-    id: "TXN-004",
-    customer: "Walk-in Customer",
-    amount: "$45.00",
-    items: 2,
-    status: "completed",
-    time: "1 hour ago",
-  },
-  {
-    id: "TXN-005",
-    customer: "Robert Chen",
-    amount: "$567.25",
-    items: 12,
-    status: "completed",
-    time: "2 hours ago",
-  },
-];
+const paymentStyles: Record<string, string> = {
+  cash: "bg-primary/10 text-primary",
+  card: "bg-secondary text-secondary-foreground",
+  qris: "bg-accent/10 text-accent-foreground",
+  transfer: "bg-muted text-muted-foreground",
+  other: "bg-muted text-muted-foreground",
+};
 
 export function RecentTransactions() {
+  const { data: transactions, isLoading } = useRecentTransactions();
+  const { business } = useBusiness();
+  const navigate = useNavigate();
+
+  const formatCurrency = (value: number) => {
+    const currency = business?.currency || 'USD';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+    }).format(value);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+        <Skeleton className="h-6 w-48 mb-4" />
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-16 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-lg border border-border bg-card p-5">
+    <div className="rounded-xl border border-border bg-card p-6 shadow-card">
       <div className="mb-4 flex items-center justify-between">
         <div>
-          <h3 className="text-base font-semibold text-foreground">Recent Transactions</h3>
+          <h3 className="text-lg font-semibold text-foreground">Recent Transactions</h3>
           <p className="text-sm text-muted-foreground">Latest sales activity</p>
         </div>
-        <button className="text-sm font-medium text-primary hover:underline">
+        <Button variant="ghost" size="sm" onClick={() => navigate("/transactions")}>
           View all
-        </button>
+        </Button>
       </div>
 
-      <div className="space-y-2">
-        {transactions.map((transaction) => (
-          <div
-            key={transaction.id}
-            className="flex items-center gap-3 rounded-md p-3 transition-colors hover:bg-muted/50"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted">
-              <Receipt className="h-4 w-4 text-muted-foreground" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium text-foreground">
-                  {transaction.id}
-                </p>
-                <Badge
-                  variant={transaction.status === "completed" ? "default" : "secondary"}
-                  className="text-xs font-normal"
-                >
-                  {transaction.status}
-                </Badge>
+      {!transactions || transactions.length === 0 ? (
+        <div className="flex h-[200px] items-center justify-center text-muted-foreground">
+          No transactions yet
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {transactions.map((tx) => (
+            <div key={tx.id} className="flex items-center gap-4 py-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <ShoppingCart className="h-5 w-5 text-primary" />
               </div>
-              <p className="text-xs text-muted-foreground">
-                {transaction.customer} • {transaction.items} items
-              </p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <p className="text-sm font-medium text-foreground">{tx.invoice_number}</p>
+                  <Badge variant="secondary" className={paymentStyles[tx.payment_method] || paymentStyles.other}>
+                    {tx.payment_method}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {tx.customer_name || "Walk-in"} • {format(new Date(tx.created_at), "HH:mm")}
+                </p>
+              </div>
+              <p className="text-sm font-semibold text-foreground">{formatCurrency(tx.total)}</p>
             </div>
-            <div className="text-right">
-              <p className="text-sm font-semibold text-foreground tabular-nums">
-                {transaction.amount}
-              </p>
-              <p className="text-xs text-muted-foreground">{transaction.time}</p>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

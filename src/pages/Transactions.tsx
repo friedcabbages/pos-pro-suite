@@ -11,11 +11,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Calendar, Search, Download, Eye, Filter } from "lucide-react";
 import { useSales } from "@/hooks/useSales";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 const paymentStyles: Record<string, string> = {
   cash: "bg-primary/10 text-primary",
@@ -27,6 +34,8 @@ const paymentStyles: Record<string, string> = {
 
 export default function Transactions() {
   const [search, setSearch] = useState("");
+  const [selectedTransaction, setSelectedTransaction] = useState<any | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
   const { data: sales, isLoading } = useSales();
   const { business } = useBusiness();
 
@@ -49,6 +58,47 @@ export default function Transactions() {
     }).format(value);
   };
 
+  const handleExport = () => {
+    if (filteredTransactions.length === 0) {
+      toast.error("No transactions to export");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const headers = ["Invoice", "Date & Time", "Customer", "Items", "Total", "Payment Method"];
+      const rows = filteredTransactions.map((tx) => [
+        tx.invoice_number,
+        format(new Date(tx.created_at), "yyyy-MM-dd HH:mm:ss"),
+        tx.customer_name || "Walk-in",
+        (tx.items?.length || 0).toString(),
+        tx.total.toString(),
+        tx.payment_method,
+      ]);
+
+      const csvContent = [
+        headers.join(","),
+        ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+      ].join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `transactions_${format(new Date(), "yyyy-MM-dd")}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Transactions exported successfully");
+    } catch (error) {
+      toast.error("Failed to export transactions");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -62,9 +112,9 @@ export default function Transactions() {
               View and manage all sales transactions
             </p>
           </div>
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleExport} disabled={isExporting}>
             <Download className="mr-2 h-4 w-4" />
-            Export
+            {isExporting ? "Exporting..." : "Export"}
           </Button>
         </div>
 
@@ -169,6 +219,7 @@ export default function Transactions() {
                           variant="ghost"
                           size="icon"
                           className="opacity-0 group-hover:opacity-100"
+                          onClick={() => setSelectedTransaction(tx)}
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -180,6 +231,120 @@ export default function Transactions() {
             </Table>
           )}
         </div>
+
+        {/* Transaction Details Dialog */}
+        <Dialog open={!!selectedTransaction} onOpenChange={() => setSelectedTransaction(null)}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Transaction Details</DialogTitle>
+            </DialogHeader>
+            {selectedTransaction && (
+              <div className="space-y-6">
+                {/* Transaction Info */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Invoice Number</p>
+                    <p className="font-mono font-medium">{selectedTransaction.invoice_number}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Date & Time</p>
+                    <p className="font-medium">
+                      {format(new Date(selectedTransaction.created_at), "PPpp")}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Customer</p>
+                    <p className="font-medium">{selectedTransaction.customer_name || "Walk-in"}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Payment Method</p>
+                    <Badge
+                      variant="secondary"
+                      className={paymentStyles[selectedTransaction.payment_method] || paymentStyles.other}
+                    >
+                      {selectedTransaction.payment_method}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* Items */}
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Items</p>
+                  <div className="rounded-lg border border-border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Product</TableHead>
+                          <TableHead className="text-right">Qty</TableHead>
+                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead className="text-right">Total</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {selectedTransaction.items?.map((item: any, index: number) => (
+                          <TableRow key={index}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{item.product?.name || "Unknown Product"}</p>
+                                {item.product?.sku && (
+                                  <p className="text-xs text-muted-foreground">{item.product.sku}</p>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">{item.quantity}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(item.sell_price)}</TableCell>
+                            <TableCell className="text-right font-medium">{formatCurrency(item.total)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* Summary */}
+                <div className="space-y-2 pt-4 border-t border-border">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Subtotal</span>
+                    <span>{formatCurrency(selectedTransaction.subtotal)}</span>
+                  </div>
+                  {selectedTransaction.discount_amount > 0 && (
+                    <div className="flex justify-between text-destructive">
+                      <span>Discount</span>
+                      <span>-{formatCurrency(selectedTransaction.discount_amount)}</span>
+                    </div>
+                  )}
+                  {selectedTransaction.tax_amount > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Tax</span>
+                      <span>{formatCurrency(selectedTransaction.tax_amount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-lg font-bold pt-2 border-t border-border">
+                    <span>Total</span>
+                    <span className="text-primary">{formatCurrency(selectedTransaction.total)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Paid</span>
+                    <span>{formatCurrency(selectedTransaction.payment_amount)}</span>
+                  </div>
+                  {selectedTransaction.change_amount > 0 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Change</span>
+                      <span>{formatCurrency(selectedTransaction.change_amount)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedTransaction.notes && (
+                  <div className="pt-4 border-t border-border">
+                    <p className="text-sm text-muted-foreground">Notes</p>
+                    <p className="mt-1">{selectedTransaction.notes}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
