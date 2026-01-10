@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,9 +25,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Building2, Search, MoreHorizontal, Eye, Ban, CheckCircle, UserCog } from 'lucide-react';
-import { toast } from 'sonner';
+import { Building2, Search, MoreHorizontal, Eye, Ban, CheckCircle, UserCog, Users, DollarSign } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAdminBusinesses, useAdminAction, useSystemStats } from '@/hooks/useSuperAdmin';
 
 interface Business {
   id: string;
@@ -40,50 +38,26 @@ interface Business {
   created_at: string;
   owner_id: string | null;
   is_active?: boolean;
+  user_count?: number;
+  owner?: {
+    full_name: string | null;
+    phone: string | null;
+  };
 }
 
 export default function BusinessesPage() {
   const [search, setSearch] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [dialogAction, setDialogAction] = useState<'view' | 'suspend' | 'activate' | 'impersonate' | null>(null);
-  const queryClient = useQueryClient();
 
-  const { data: businesses, isLoading } = useQuery({
-    queryKey: ['admin-businesses'],
-    queryFn: async () => {
-      // Note: In production, this should call an edge function with service role
-      const { data, error } = await supabase
-        .from('businesses')
-        .select('*')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      return data as Business[];
-    },
-  });
-
-  const adminActionMutation = useMutation({
-    mutationFn: async ({ action, businessId }: { action: string; businessId: string }) => {
-      const { data, error } = await supabase.functions.invoke('admin-actions', {
-        body: { action, business_id: businessId },
-      });
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (_, variables) => {
-      toast.success(`Business ${variables.action}d successfully`);
-      queryClient.invalidateQueries({ queryKey: ['admin-businesses'] });
-      setDialogAction(null);
-      setSelectedBusiness(null);
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
+  const { data: businesses, isLoading } = useAdminBusinesses();
+  const { data: stats } = useSystemStats();
+  const adminAction = useAdminAction();
 
   const filteredBusinesses = businesses?.filter((b) =>
     b.name.toLowerCase().includes(search.toLowerCase()) ||
-    b.email?.toLowerCase().includes(search.toLowerCase())
+    b.email?.toLowerCase().includes(search.toLowerCase()) ||
+    b.owner?.full_name?.toLowerCase().includes(search.toLowerCase())
   );
 
   const handleAction = (business: Business, action: 'view' | 'suspend' | 'activate' | 'impersonate') => {
@@ -99,10 +73,24 @@ export default function BusinessesPage() {
       return;
     }
 
-    adminActionMutation.mutate({
-      action: dialogAction,
-      businessId: selectedBusiness.id,
-    });
+    adminAction.mutate(
+      { action: dialogAction, businessId: selectedBusiness.id },
+      {
+        onSuccess: () => {
+          setDialogAction(null);
+          setSelectedBusiness(null);
+        },
+      }
+    );
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
   };
 
   return (
@@ -115,20 +103,29 @@ export default function BusinessesPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Businesses</CardTitle>
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{businesses?.length || 0}</div>
+            <div className="text-2xl font-bold">{stats?.total_businesses || businesses?.length || 0}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats?.total_users || 0}</div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">Active</CardTitle>
-            <CheckCircle className="h-4 w-4 text-success" />
+            <CheckCircle className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{businesses?.filter(b => b.is_active !== false).length || 0}</div>
@@ -136,11 +133,11 @@ export default function BusinessesPage() {
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Suspended</CardTitle>
-            <Ban className="h-4 w-4 text-destructive" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{businesses?.filter(b => b.is_active === false).length || 0}</div>
+            <div className="text-2xl font-bold">{formatCurrency(stats?.total_revenue || 0)}</div>
           </CardContent>
         </Card>
       </div>
@@ -165,7 +162,8 @@ export default function BusinessesPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Business</TableHead>
-                <TableHead>Email</TableHead>
+                <TableHead>Owner</TableHead>
+                <TableHead>Users</TableHead>
                 <TableHead>Currency</TableHead>
                 <TableHead>Created</TableHead>
                 <TableHead>Status</TableHead>
@@ -175,21 +173,27 @@ export default function BusinessesPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : filteredBusinesses?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No businesses found
                   </TableCell>
                 </TableRow>
               ) : (
                 filteredBusinesses?.map((business) => (
                   <TableRow key={business.id}>
-                    <TableCell className="font-medium">{business.name}</TableCell>
-                    <TableCell>{business.email || '-'}</TableCell>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{business.name}</p>
+                        <p className="text-sm text-muted-foreground">{business.email || '-'}</p>
+                      </div>
+                    </TableCell>
+                    <TableCell>{business.owner?.full_name || '-'}</TableCell>
+                    <TableCell>{business.user_count || 0}</TableCell>
                     <TableCell>{business.currency}</TableCell>
                     <TableCell>{format(new Date(business.created_at), 'dd MMM yyyy')}</TableCell>
                     <TableCell>
@@ -258,29 +262,39 @@ export default function BusinessesPage() {
 
           {dialogAction === 'view' && selectedBusiness && (
             <div className="space-y-4">
-              <div>
-                <label className="text-sm text-muted-foreground">Business Name</label>
-                <p className="font-medium">{selectedBusiness.name}</p>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground">Email</label>
-                <p className="font-medium">{selectedBusiness.email || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground">Phone</label>
-                <p className="font-medium">{selectedBusiness.phone || '-'}</p>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground">Currency</label>
-                <p className="font-medium">{selectedBusiness.currency}</p>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground">Owner ID</label>
-                <p className="font-mono text-sm">{selectedBusiness.owner_id}</p>
-              </div>
-              <div>
-                <label className="text-sm text-muted-foreground">Created</label>
-                <p className="font-medium">{format(new Date(selectedBusiness.created_at), 'PPpp')}</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-muted-foreground">Business Name</label>
+                  <p className="font-medium">{selectedBusiness.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">Currency</label>
+                  <p className="font-medium">{selectedBusiness.currency}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">Email</label>
+                  <p className="font-medium">{selectedBusiness.email || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">Phone</label>
+                  <p className="font-medium">{selectedBusiness.phone || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">Owner</label>
+                  <p className="font-medium">{selectedBusiness.owner?.full_name || '-'}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">Users</label>
+                  <p className="font-medium">{selectedBusiness.user_count || 0}</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm text-muted-foreground">Owner ID</label>
+                  <p className="font-mono text-sm">{selectedBusiness.owner_id}</p>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-sm text-muted-foreground">Created</label>
+                  <p className="font-medium">{format(new Date(selectedBusiness.created_at), 'PPpp')}</p>
+                </div>
               </div>
             </div>
           )}
@@ -293,9 +307,9 @@ export default function BusinessesPage() {
               <Button
                 variant={dialogAction === 'suspend' ? 'destructive' : 'default'}
                 onClick={confirmAction}
-                disabled={adminActionMutation.isPending}
+                disabled={adminAction.isPending}
               >
-                {adminActionMutation.isPending ? 'Processing...' : 'Confirm'}
+                {adminAction.isPending ? 'Processing...' : 'Confirm'}
               </Button>
             )}
           </DialogFooter>

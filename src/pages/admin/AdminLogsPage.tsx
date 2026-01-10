@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Table,
   TableBody,
@@ -19,42 +18,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Search, Download, FileText } from 'lucide-react';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Search, Download, FileText, CalendarIcon } from 'lucide-react';
 import { format } from 'date-fns';
-
-interface AuditLog {
-  id: string;
-  entity_type: string;
-  action: string;
-  entity_id: string | null;
-  user_id: string | null;
-  old_value: Record<string, unknown> | null;
-  new_value: Record<string, unknown> | null;
-  ip_address: string | null;
-  created_at: string;
-  business_id: string;
-}
+import { cn } from '@/lib/utils';
+import { useAdminAuditLogs, useAdminBusinesses } from '@/hooks/useSuperAdmin';
+import { toast } from 'sonner';
 
 export default function AdminLogsPage() {
   const [search, setSearch] = useState('');
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const [actionFilter, setActionFilter] = useState<string>('all');
+  const [businessFilter, setBusinessFilter] = useState<string>('all');
+  const [dateFrom, setDateFrom] = useState<Date | undefined>();
+  const [dateTo, setDateTo] = useState<Date | undefined>();
 
-  const { data: logs, isLoading } = useQuery({
-    queryKey: ['admin-audit-logs'],
-    queryFn: async () => {
-      // In production, this should be an edge function with service role
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(500);
-      
-      if (error) throw error;
-      return data as AuditLog[];
-    },
-  });
+  const filters = {
+    business_id: businessFilter !== 'all' ? businessFilter : undefined,
+    entity_type: entityFilter !== 'all' ? entityFilter : undefined,
+    action: actionFilter !== 'all' ? actionFilter : undefined,
+    date_from: dateFrom?.toISOString(),
+    date_to: dateTo?.toISOString(),
+  };
+
+  const { data: logs, isLoading } = useAdminAuditLogs(filters);
+  const { data: businesses } = useAdminBusinesses();
 
   const entityTypes = [...new Set(logs?.map(l => l.entity_type) || [])];
   const actionTypes = [...new Set(logs?.map(l => l.action) || [])];
@@ -63,12 +52,10 @@ export default function AdminLogsPage() {
     const matchesSearch = 
       log.entity_type.toLowerCase().includes(search.toLowerCase()) ||
       log.action.toLowerCase().includes(search.toLowerCase()) ||
-      log.entity_id?.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesEntity = entityFilter === 'all' || log.entity_type === entityFilter;
-    const matchesAction = actionFilter === 'all' || log.action === actionFilter;
+      log.entity_id?.toLowerCase().includes(search.toLowerCase()) ||
+      log.business?.name?.toLowerCase().includes(search.toLowerCase());
 
-    return matchesSearch && matchesEntity && matchesAction;
+    return matchesSearch;
   });
 
   const getActionBadgeVariant = (action: string) => {
@@ -79,11 +66,15 @@ export default function AdminLogsPage() {
   };
 
   const handleExport = () => {
-    if (!filteredLogs?.length) return;
+    if (!filteredLogs?.length) {
+      toast.error('No logs to export');
+      return;
+    }
 
-    const headers = ['Timestamp', 'Entity', 'Action', 'Entity ID', 'User ID', 'IP Address'];
+    const headers = ['Timestamp', 'Business', 'Entity', 'Action', 'Entity ID', 'User ID', 'IP Address'];
     const rows = filteredLogs.map((log) => [
       format(new Date(log.created_at), 'yyyy-MM-dd HH:mm:ss'),
+      log.business?.name || '',
       log.entity_type,
       log.action,
       log.entity_id || '',
@@ -99,8 +90,10 @@ export default function AdminLogsPage() {
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `admin_audit_logs_${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    link.download = `system_audit_logs_${format(new Date(), 'yyyy-MM-dd')}.csv`;
     link.click();
+
+    toast.success('Audit logs exported successfully');
   };
 
   return (
@@ -117,7 +110,7 @@ export default function AdminLogsPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center justify-between">
@@ -145,6 +138,14 @@ export default function AdminLogsPage() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="pt-6">
+            <div>
+              <p className="text-sm text-muted-foreground">Businesses</p>
+              <p className="text-2xl font-bold">{businesses?.length || 0}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -158,8 +159,19 @@ export default function AdminLogsPage() {
             className="pl-9"
           />
         </div>
-        <Select value={entityFilter} onValueChange={setEntityFilter}>
+        <Select value={businessFilter} onValueChange={setBusinessFilter}>
           <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Business" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Businesses</SelectItem>
+            {businesses?.map((b) => (
+              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={entityFilter} onValueChange={setEntityFilter}>
+          <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Entity Type" />
           </SelectTrigger>
           <SelectContent>
@@ -170,7 +182,7 @@ export default function AdminLogsPage() {
           </SelectContent>
         </Select>
         <Select value={actionFilter} onValueChange={setActionFilter}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="Action" />
           </SelectTrigger>
           <SelectContent>
@@ -180,6 +192,38 @@ export default function AdminLogsPage() {
             ))}
           </SelectContent>
         </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn(!dateFrom && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateFrom ? format(dateFrom, "MMM dd") : "From"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateFrom}
+              onSelect={setDateFrom}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn(!dateTo && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {dateTo ? format(dateTo, "MMM dd") : "To"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateTo}
+              onSelect={setDateTo}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
       </div>
 
       {/* Table */}
@@ -189,6 +233,7 @@ export default function AdminLogsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Timestamp</TableHead>
+                <TableHead>Business</TableHead>
                 <TableHead>Entity</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Entity ID</TableHead>
@@ -199,13 +244,13 @@ export default function AdminLogsPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : filteredLogs?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No logs found
                   </TableCell>
                 </TableRow>
@@ -215,6 +260,7 @@ export default function AdminLogsPage() {
                     <TableCell className="text-sm">
                       {format(new Date(log.created_at), 'dd MMM yyyy HH:mm:ss')}
                     </TableCell>
+                    <TableCell className="text-sm">{log.business?.name || '-'}</TableCell>
                     <TableCell>
                       <Badge variant="outline">{log.entity_type}</Badge>
                     </TableCell>

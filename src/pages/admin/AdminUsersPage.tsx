@@ -1,6 +1,4 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -12,59 +10,36 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Search, Users } from 'lucide-react';
 import { format } from 'date-fns';
-
-interface UserWithRole {
-  id: string;
-  user_id: string;
-  role: string;
-  business_id: string;
-  branch_id: string | null;
-  created_at: string;
-  profile?: {
-    full_name: string | null;
-    phone: string | null;
-  };
-  business?: {
-    name: string;
-  };
-}
+import { useAdminUsers, useAdminBusinesses } from '@/hooks/useSuperAdmin';
 
 export default function AdminUsersPage() {
   const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
+  const [businessFilter, setBusinessFilter] = useState<string>('all');
 
-  const { data: users, isLoading } = useQuery({
-    queryKey: ['admin-users'],
-    queryFn: async () => {
-      const { data: roles, error } = await supabase
-        .from('user_roles')
-        .select('*, business:businesses(name)')
-        .order('created_at', { ascending: false });
-      
-      if (error) throw error;
-      
-      // Fetch profiles separately
-      const userIds = roles?.map(r => r.user_id) || [];
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('id, full_name, phone')
-        .in('id', userIds);
-      
-      const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
-      
-      return roles?.map(role => ({
-        ...role,
-        profile: profileMap.get(role.user_id) || { full_name: null, phone: null },
-      })) as UserWithRole[];
-    },
+  const { data: users, isLoading } = useAdminUsers();
+  const { data: businesses } = useAdminBusinesses();
+
+  const filteredUsers = users?.filter((u) => {
+    const matchesSearch = 
+      u.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
+      u.email?.toLowerCase().includes(search.toLowerCase()) ||
+      u.business?.name?.toLowerCase().includes(search.toLowerCase());
+    
+    const matchesRole = roleFilter === 'all' || u.role === roleFilter;
+    const matchesBusiness = businessFilter === 'all' || u.business_id === businessFilter;
+
+    return matchesSearch && matchesRole && matchesBusiness;
   });
-
-  const filteredUsers = users?.filter((u) =>
-    u.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.business?.name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.role.toLowerCase().includes(search.toLowerCase())
-  );
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
@@ -121,8 +96,8 @@ export default function AdminUsersPage() {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="flex items-center gap-4">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-4">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -132,6 +107,28 @@ export default function AdminUsersPage() {
             className="pl-9"
           />
         </div>
+        <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <SelectTrigger className="w-[150px]">
+            <SelectValue placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Roles</SelectItem>
+            <SelectItem value="owner">Owner</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="cashier">Cashier</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={businessFilter} onValueChange={setBusinessFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Business" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Businesses</SelectItem>
+            {businesses?.map((b) => (
+              <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Table */}
@@ -141,6 +138,7 @@ export default function AdminUsersPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Business</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Phone</TableHead>
@@ -150,13 +148,13 @@ export default function AdminUsersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8">
+                  <TableCell colSpan={6} className="text-center py-8">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : filteredUsers?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
@@ -166,6 +164,7 @@ export default function AdminUsersPage() {
                     <TableCell className="font-medium">
                       {user.profile?.full_name || 'Unknown'}
                     </TableCell>
+                    <TableCell>{user.email || '-'}</TableCell>
                     <TableCell>{user.business?.name || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={getRoleBadgeVariant(user.role)}>

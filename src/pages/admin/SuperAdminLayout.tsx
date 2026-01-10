@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
   Shield, 
@@ -7,13 +7,19 @@ import {
   FileText, 
   Settings,
   LogOut,
-  ChevronRight
+  ChevronRight,
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSuperAdminCheck } from '@/hooks/useSuperAdmin';
 
 export default function SuperAdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, loading: authLoading, initialized: authInitialized } = useAuth();
+  const { data: isSuperAdmin, isLoading: checkingAdmin, error } = useSuperAdminCheck();
 
   const navItems = [
     { label: 'Businesses', path: '/admin', icon: Building2 },
@@ -28,6 +34,56 @@ export default function SuperAdminLayout() {
     }
     return location.pathname.startsWith(path);
   };
+
+  // Wait for auth to initialize
+  if (!authInitialized || authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-sm text-muted-foreground">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not logged in - redirect to auth
+  if (!user) {
+    return <Navigate to="/auth" state={{ from: location }} replace />;
+  }
+
+  // Checking super admin status
+  if (checkingAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-destructive" />
+          <p className="text-sm text-muted-foreground">Verifying super admin access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Not a super admin
+  if (!isSuperAdmin) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
+            <AlertTriangle className="h-8 w-8 text-destructive" />
+          </div>
+          <h1 className="text-2xl font-bold">Access Denied</h1>
+          <p className="text-muted-foreground max-w-sm">
+            You don't have super admin privileges to access this area. 
+            This incident has been logged.
+          </p>
+          <Button onClick={() => navigate('/')}>
+            Return to Home
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -66,7 +122,10 @@ export default function SuperAdminLayout() {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-border">
+        <div className="p-4 border-t border-border space-y-2">
+          <div className="px-3 py-2 text-xs text-muted-foreground">
+            Logged in as: <span className="font-medium">{user.email}</span>
+          </div>
           <Button 
             variant="ghost" 
             className="w-full justify-start text-muted-foreground"
