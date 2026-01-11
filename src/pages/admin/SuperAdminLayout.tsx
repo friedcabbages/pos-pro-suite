@@ -19,6 +19,7 @@ import { useBusiness } from "@/contexts/BusinessContext";
 
 
 export default function SuperAdminLayout() {
+  const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
