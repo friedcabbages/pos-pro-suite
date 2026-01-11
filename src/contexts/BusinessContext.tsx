@@ -89,20 +89,71 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setWarehouses([]);
   }, []);
 
-  const fetchBusinessData = useCallback(async () => {
-    // Prevent concurrent fetches
-    if (fetchingRef.current) {
-      console.log('[Business] Fetch already in progress, skipping');
-      return;
-    }
+ const fetchBusinessData = useCallback(async () => {
+  if (fetchingRef.current) {
+    console.log('[Business] Fetch already in progress, skipping');
+    return;
+  }
 
-    if (!user) {
-      console.log('[Business] No user, clearing state');
-      clearBusiness();
+  if (!user) {
+    console.log('[Business] No user, clearing state');
+    clearBusiness();
+    setLoading(false);
+    return;
+  }
+
+  fetchingRef.current = true;
+  setLoading(true);
+  console.log('[Business] Fetching data for user:', user.id);
+
+  try {
+    // 1. Check super admin first
+    const { data: adminCheck, error: adminErr } = await supabase.functions.invoke(
+      'admin-actions',
+      { body: { action: 'check_super_admin' } }
+    );
+
+    if (!adminErr && adminCheck?.is_super_admin) {
+      console.log('[Business] Super admin detected, skipping business context');
+
+      // Super admin does not need business context
+      setUserRole(null);
+      setBusiness(null);
+      setBranch(null);
+      setWarehouse(null);
+      setBranches([]);
+      setWarehouses([]);
+
+      lastUserIdRef.current = user.id;
       setLoading(false);
+      fetchingRef.current = false;
       return;
     }
 
+    // 2. Normal user flow (existing logic)
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (roleError) {
+      console.error('[Business] Role fetch error:', roleError);
+      setLoading(false);
+      fetchingRef.current = false;
+      return;
+    }
+
+    if (!roleData) {
+      console.log('[Business] No role found - user needs onboarding');
+      clearBusiness();
+      lastUserIdRef.current = user.id;
+      setLoading(false);
+      fetchingRef.current = false;
+      return;
+    }
+
+<<<<<<< HEAD
     // Skip if we already fetched for this user
     if (lastUserIdRef.current === user.id && business !== null) {
       console.log('[Business] Already fetched for this user');
@@ -138,6 +189,8 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+=======
+>>>>>>> 92619a5 (Fix super admin flow: skip user_roles for system admin)
       setUserRole(roleData as UserRole);
 
       // Get business with status
