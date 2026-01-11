@@ -159,29 +159,28 @@ export default function SuperAdminLayout() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <header className="h-14 border-b border-border bg-card flex items-center px-6">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Shield className="h-4 w-4" />
-            <span>Super Admin</span>
-            <ChevronRight className="h-4 w-4" />
-            <span className="text-foreground font-medium">
-              {navItems.find(item => isActive(item.path))?.label || 'Dashboard'}
-            </span>
-              <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-            disabled={loggingOut}
-            className={cn(
-              "w-full justify-start text-muted-foreground hover:text-foreground",
-              collapsed && "justify-center px-0"
-            )}
-          >
-            <LogOut className="h-4 w-4" />
-            {!collapsed && <span className="ml-2">{loggingOut ? 'Logging out...' : 'Logout'}</span>}
-          </Button>
-          </div>
-        </header>
+       <header className="h-14 border-b border-border bg-card flex items-center px-6">
+  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+    <Shield className="h-4 w-4" />
+    <span>Super Admin</span>
+    <ChevronRight className="h-4 w-4" />
+    <span className="text-foreground font-medium">
+      {navItems.find(item => isActive(item.path))?.label || 'Dashboard'}
+    </span>
+  </div>
+
+  <Button
+    variant="ghost"
+    size="sm"
+    onClick={handleLogout}
+    disabled={loggingOut}
+    className="ml-auto text-muted-foreground hover:text-foreground"
+  >
+    <LogOut className="h-4 w-4 mr-2" />
+    {loggingOut ? 'Logging out...' : 'Logout'}
+  </Button>
+</header>
+
 
         {/* Page Content */}
         <main className="flex-1 p-6 overflow-auto">
