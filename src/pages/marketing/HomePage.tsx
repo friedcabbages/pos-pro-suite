@@ -8,7 +8,8 @@ import {
   Shield, 
   Zap,
   CheckCircle2,
-  ArrowRight
+  ArrowRight,
+  Phone
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -72,8 +73,8 @@ export default function HomePage() {
               Manage sales, inventory, and teams from one powerful platform.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-              <Button size="lg" className="w-full sm:w-auto" onClick={() => navigate('/auth')}>
-                Start Free Trial
+              <Button size="lg" className="w-full sm:w-auto" onClick={() => navigate('/marketing/contact')}>
+                Request Demo
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
               <Button size="lg" variant="outline" className="w-full sm:w-auto" onClick={() => navigate('/marketing/features')}>
@@ -81,7 +82,7 @@ export default function HomePage() {
               </Button>
             </div>
             <p className="mt-4 text-sm text-muted-foreground">
-              No credit card required • 14-day free trial
+              Enterprise-ready • Secure multi-tenant architecture
             </p>
           </div>
         </div>
@@ -138,9 +139,9 @@ export default function HomePage() {
                 ))}
               </ul>
               <div className="mt-8">
-                <Button onClick={() => navigate('/auth')}>
-                  Get Started Now
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button onClick={() => navigate('/marketing/contact')}>
+                  Contact Sales
+                  <Phone className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             </div>
@@ -160,16 +161,26 @@ export default function HomePage() {
             Ready to modernize your retail business?
           </h2>
           <p className="text-lg text-primary-foreground/80 mb-8 max-w-2xl mx-auto">
-            Join thousands of businesses already using VeloPOS to streamline their operations.
+            Join businesses already using VeloPOS to streamline their operations.
           </p>
-          <Button 
-            size="lg" 
-            variant="secondary"
-            onClick={() => navigate('/auth')}
-          >
-            Start Your Free Trial
-            <ArrowRight className="ml-2 h-5 w-5" />
-          </Button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button 
+              size="lg" 
+              variant="secondary"
+              onClick={() => navigate('/marketing/contact')}
+            >
+              Request Demo
+              <ArrowRight className="ml-2 h-5 w-5" />
+            </Button>
+            <Button 
+              size="lg" 
+              variant="outline"
+              className="border-primary-foreground/30 text-primary-foreground hover:bg-primary-foreground/10"
+              onClick={() => navigate('/marketing/pricing')}
+            >
+              View Pricing
+            </Button>
+          </div>
         </div>
       </section>
     </div>

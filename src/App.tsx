@@ -1,4 +1,8 @@
 import { Toaster } from "@/components/ui/toaster";
+import NoAccess from "./pages/NoAccess";
+import SubscriptionRequired from "./pages/SubscriptionRequired";
+import AccountSuspended from "./pages/AccountSuspended";
+import ContactPage from "./pages/marketing/ContactPage";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";

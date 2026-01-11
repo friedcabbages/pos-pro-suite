@@ -2,6 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+type BusinessStatus = 'trial' | 'active' | 'expired' | 'suspended';
+
 interface Business {
   id: string;
   name: string;
@@ -10,7 +12,8 @@ interface Business {
   currency: string;
   created_at: string;
   owner_id: string | null;
-  is_active?: boolean;
+  status: BusinessStatus;
+  trial_end_at: string | null;
   user_count?: number;
   owner?: {
     full_name: string | null;
@@ -57,6 +60,7 @@ interface SystemStats {
   total_users: number;
   total_products: number;
   total_revenue: number;
+  businesses_by_status?: Record<string, number>;
 }
 
 interface AuditLogFilters {
@@ -65,6 +69,14 @@ interface AuditLogFilters {
   action?: string;
   date_from?: string;
   date_to?: string;
+}
+
+interface CreateBusinessPayload {
+  business_name: string;
+  owner_email: string;
+  owner_password: string;
+  owner_name?: string;
+  currency?: string;
 }
 
 // Check if current user is super admin
@@ -151,9 +163,40 @@ export function useAdminAction() {
       return data;
     },
     onSuccess: (_, variables) => {
-      toast.success(`Business ${variables.action}d successfully`);
+      const actionLabels: Record<string, string> = {
+        activate: 'activated',
+        suspend: 'suspended',
+        expire: 'expired',
+        start_trial: 'trial started',
+      };
+      toast.success(`Business ${actionLabels[variables.action] || variables.action} successfully`);
       queryClient.invalidateQueries({ queryKey: ['admin-businesses'] });
       queryClient.invalidateQueries({ queryKey: ['admin-audit-logs'] });
+      queryClient.invalidateQueries({ queryKey: ['system-stats'] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+}
+
+// Create business with owner mutation
+export function useCreateBusinessWithOwner() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (payload: CreateBusinessPayload) => {
+      const { data, error } = await supabase.functions.invoke('admin-actions', {
+        body: { action: 'create_business_with_owner', payload },
+      });
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Business and owner created successfully');
+      queryClient.invalidateQueries({ queryKey: ['admin-businesses'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      queryClient.invalidateQueries({ queryKey: ['system-stats'] });
     },
     onError: (error: Error) => {
       toast.error(error.message);

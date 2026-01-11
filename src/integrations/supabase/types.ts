@@ -116,7 +116,9 @@ export type Database = {
           name: string
           owner_id: string | null
           phone: string | null
+          status: Database["public"]["Enums"]["business_status"]
           tax_rate: number | null
+          trial_end_at: string | null
           updated_at: string
         }
         Insert: {
@@ -129,7 +131,9 @@ export type Database = {
           name: string
           owner_id?: string | null
           phone?: string | null
+          status?: Database["public"]["Enums"]["business_status"]
           tax_rate?: number | null
+          trial_end_at?: string | null
           updated_at?: string
         }
         Update: {
@@ -142,7 +146,9 @@ export type Database = {
           name?: string
           owner_id?: string | null
           phone?: string | null
+          status?: Database["public"]["Enums"]["business_status"]
           tax_rate?: number | null
+          trial_end_at?: string | null
           updated_at?: string
         }
         Relationships: []
@@ -1185,6 +1191,7 @@ export type Database = {
     }
     Enums: {
       app_role: "owner" | "admin" | "cashier"
+      business_status: "trial" | "active" | "expired" | "suspended"
       inventory_action:
         | "stock_in"
         | "stock_out"
@@ -1322,6 +1329,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["owner", "admin", "cashier"],
+      business_status: ["trial", "active", "expired", "suspended"],
       inventory_action: [
         "stock_in",
         "stock_out",

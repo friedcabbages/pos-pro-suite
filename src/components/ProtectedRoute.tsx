@@ -14,7 +14,17 @@ const CASHIER_ALLOWED_ROUTES = ['/pos', '/products', '/'];
 
 export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedRouteProps) {
   const { user, loading: authLoading, initialized: authInitialized } = useAuth();
-  const { business, loading: businessLoading, userRole, isCashier, isAdmin, isOwner } = useBusiness();
+  const { 
+    business, 
+    loading: businessLoading, 
+    userRole, 
+    isCashier, 
+    isAdmin, 
+    isOwner,
+    businessStatus,
+    isSubscriptionActive,
+    isTrialExpired
+  } = useBusiness();
   const location = useLocation();
 
   // Wait for auth to fully initialize before making any decisions
@@ -35,7 +45,7 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Wait for business data to load before deciding on onboarding
+  // Wait for business data to load before deciding
   if (businessLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -47,16 +57,28 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     );
   }
 
-  // User logged in but no business
-  // Cashiers should never see onboarding - they need to be added by owner
-  if (!business) {
-    // If user has a role but no business data loaded yet, this is an error state
-    if (userRole) {
-      console.log('[ProtectedRoute] User has role but no business - data inconsistency');
-    }
-    // Only non-cashier users (or users with no role) should see onboarding
-    console.log('[ProtectedRoute] No business, redirecting to /onboarding');
-    return <Navigate to="/onboarding" replace />;
+  // User logged in but no business - B2B model requires admin provisioning
+  if (!business || !userRole) {
+    console.log('[ProtectedRoute] No business/role, redirecting to /no-access');
+    return <Navigate to="/no-access" replace />;
+  }
+
+  // Check business status - suspended accounts
+  if (businessStatus === 'suspended') {
+    console.log('[ProtectedRoute] Business suspended, redirecting to /account-suspended');
+    return <Navigate to="/account-suspended" replace />;
+  }
+
+  // Check business status - expired or trial expired
+  if (businessStatus === 'expired' || isTrialExpired) {
+    console.log('[ProtectedRoute] Subscription expired, redirecting to /subscription-required');
+    return <Navigate to="/subscription-required" replace />;
+  }
+
+  // Ensure subscription is active
+  if (!isSubscriptionActive) {
+    console.log('[ProtectedRoute] Subscription not active, redirecting to /subscription-required');
+    return <Navigate to="/subscription-required" replace />;
   }
 
   // Role-based access control
