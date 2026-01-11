@@ -72,50 +72,57 @@ serve(async (req) => {
         );
       }
 
-      case "list_businesses": {
-        if (!isSuperAdmin) {
-          return new Response(
-            JSON.stringify({ error: "Super admin access required" }),
-            { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+    case "list_businesses": {
+  if (!isSuperAdmin) {
+    return new Response(
+      JSON.stringify({ error: "Super admin access required" }),
+      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
-        const { data: businesses, error } = await adminClient
-          .from("businesses")
-          .select(`
-            *,
-            owner:profiles!businesses_owner_id_fkey(full_name, phone)
-          `)
-          .order("created_at", { ascending: false });
+  const { data: businesses, error } = await adminClient
+    .from("businesses")
+    .select("*")
+    .order("created_at", { ascending: false });
 
-        if (error) {
-          console.error("Error fetching businesses:", error);
-          return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+  if (error) {
+    console.error("Error fetching businesses:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
-        // Get user counts per business
-        const { data: userCounts } = await adminClient
-          .from("user_roles")
-          .select("business_id");
+  const ownerIds = businesses?.map(b => b.owner_id).filter(Boolean) || [];
 
-        const businessUserCounts = userCounts?.reduce((acc: Record<string, number>, role) => {
-          acc[role.business_id] = (acc[role.business_id] || 0) + 1;
-          return acc;
-        }, {}) || {};
+  const { data: owners } = await adminClient
+    .from("profiles")
+    .select("id, full_name, phone")
+    .in("id", ownerIds);
 
-        const enrichedBusinesses = businesses?.map(b => ({
-          ...b,
-          user_count: businessUserCounts[b.id] || 0,
-        }));
+  const ownerMap = new Map(owners?.map(o => [o.id, o]) || []);
 
-        return new Response(
-          JSON.stringify({ businesses: enrichedBusinesses }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+  const { data: userCounts } = await adminClient
+    .from("user_roles")
+    .select("business_id");
+
+  const businessUserCounts = userCounts?.reduce((acc: Record<string, number>, role) => {
+    acc[role.business_id] = (acc[role.business_id] || 0) + 1;
+    return acc;
+  }, {}) || {};
+
+  const enrichedBusinesses = businesses?.map(b => ({
+    ...b,
+    owner: ownerMap.get(b.owner_id) || null,
+    user_count: businessUserCounts[b.id] || 0,
+  }));
+
+  return new Response(
+    JSON.stringify({ businesses: enrichedBusinesses }),
+    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
+
 
       case "list_users": {
         if (!isSuperAdmin) {
