@@ -12,14 +12,32 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useState } from "react";
 import { useAuth } from '@/contexts/AuthContext';
 import { useSuperAdminCheck } from '@/hooks/useSuperAdmin';
+import { useBusiness } from "@/contexts/BusinessContext";
+
 
 export default function SuperAdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, loading: authLoading, initialized: authInitialized } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const { user, signOut, loading: authLoading, initialized: authInitialized } = useAuth();
   const { data: isSuperAdmin, isLoading: checkingAdmin, error } = useSuperAdminCheck();
+  const { clearBusiness, userRole, isAdmin, isOwner, isCashier } = useBusiness();
+
+    const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      clearBusiness();
+      await signOut();
+      navigate("/auth", { replace: true });
+    } catch (error) {
+      console.error('[Sidebar] Logout error:', error);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   const navItems = [
     { label: 'Businesses', path: '/admin', icon: Building2 },
@@ -148,6 +166,19 @@ export default function SuperAdminLayout() {
             <span className="text-foreground font-medium">
               {navItems.find(item => isActive(item.path))?.label || 'Dashboard'}
             </span>
+              <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            disabled={loggingOut}
+            className={cn(
+              "w-full justify-start text-muted-foreground hover:text-foreground",
+              collapsed && "justify-center px-0"
+            )}
+          >
+            <LogOut className="h-4 w-4" />
+            {!collapsed && <span className="ml-2">{loggingOut ? 'Logging out...' : 'Logout'}</span>}
+          </Button>
           </div>
         </header>
 
