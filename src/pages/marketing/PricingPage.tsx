@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, ArrowRight } from 'lucide-react';
+import { CheckCircle2, ArrowRight, Phone } from 'lucide-react';
 
 export default function PricingPage() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export default function PricingPage() {
         'Sales Reports',
         'Email Support',
       ],
-      cta: 'Start Free Trial',
+      cta: 'Contact Sales',
       popular: false,
     },
     {
@@ -39,7 +39,7 @@ export default function PricingPage() {
         'Multi-payment Methods',
         'Priority Support',
       ],
-      cta: 'Start Free Trial',
+      cta: 'Contact Sales',
       popular: true,
     },
     {
@@ -64,12 +64,12 @@ export default function PricingPage() {
 
   const faqs = [
     {
-      question: 'Can I try before I buy?',
-      answer: 'Yes! All plans come with a 14-day free trial. No credit card required.',
+      question: 'How do I get started?',
+      answer: 'Contact our sales team to schedule a demo. We\'ll help you choose the right plan and set up your business.',
     },
     {
       question: 'Can I change plans later?',
-      answer: 'Absolutely. You can upgrade or downgrade your plan at any time.',
+      answer: 'Absolutely. You can upgrade or downgrade your plan at any time by contacting your account manager.',
     },
     {
       question: 'What payment methods do you accept?',
@@ -131,7 +131,7 @@ export default function PricingPage() {
                   <Button 
                     className="w-full" 
                     variant={plan.popular ? 'default' : 'outline'}
-                    onClick={() => navigate('/auth')}
+                    onClick={() => navigate('/marketing/contact')}
                   >
                     {plan.cta}
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -164,16 +164,18 @@ export default function PricingPage() {
       <section className="py-20">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl font-bold text-foreground mb-4">
-            Still have questions?
+            Ready to get started?
           </h2>
           <p className="text-lg text-muted-foreground mb-8">
-            Our team is here to help. Contact us for personalized assistance.
+            Our team is here to help. Contact us for a personalized demo and pricing.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button size="lg" onClick={() => navigate('/auth')}>
-              Start Free Trial
+            <Button size="lg" onClick={() => navigate('/marketing/contact')}>
+              Request Demo
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button size="lg" variant="outline">
+            <Button size="lg" variant="outline" onClick={() => navigate('/marketing/contact')}>
+              <Phone className="mr-2 h-4 w-4" />
               Contact Sales
             </Button>
           </div>

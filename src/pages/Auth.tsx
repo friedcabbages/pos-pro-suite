@@ -9,12 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Store } from "lucide-react";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
-  const { user, signIn, signUp, initialized: authInitialized, loading: authLoading } = useAuth();
+  const { user, signIn, initialized: authInitialized, loading: authLoading } = useAuth();
   const { business, loading: businessLoading } = useBusiness();
   const navigate = useNavigate();
   const location = useLocation();
@@ -39,8 +37,9 @@ export default function Auth() {
       console.log('[Auth] Already logged in with business, redirecting to', from);
       return <Navigate to={from} replace />;
     } else {
-      console.log('[Auth] Logged in but no business, redirecting to /onboarding');
-      return <Navigate to="/onboarding" replace />;
+      // In B2B model, users without business should see an error, not onboarding
+      console.log('[Auth] Logged in but no business - user was not properly provisioned');
+      return <Navigate to="/no-access" replace />;
     }
   }
 
@@ -49,41 +48,15 @@ export default function Auth() {
     setLoading(true);
 
     try {
-      if (isLogin) {
-        const { error } = await signIn(email, password);
-        if (error) {
-          toast({
-            title: "Login Failed",
-            description: error.message,
-            variant: "destructive",
-          });
-        } else {
-          navigate("/");
-        }
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast({
+          title: "Login Failed",
+          description: error.message,
+          variant: "destructive",
+        });
       } else {
-        if (!fullName.trim()) {
-          toast({
-            title: "Name Required",
-            description: "Please enter your full name",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-        const { error } = await signUp(email, password, fullName);
-        if (error) {
-          toast({
-            title: "Sign Up Failed",
-            description: error.message,
-            variant: "destructive",
-          });
-        } else {
-          toast({
-            title: "Account Created",
-            description: "Please check your email to verify your account, or continue to set up your business.",
-          });
-          navigate("/");
-        }
+        navigate("/");
       }
     } catch (err) {
       toast({
@@ -106,7 +79,7 @@ export default function Auth() {
           </div>
           <h1 className="mt-4 text-3xl font-bold text-foreground">VeloPOS</h1>
           <p className="mt-2 text-muted-foreground">
-            {isLogin ? "Welcome back" : "Create your account"}
+            Sign in to your account
           </p>
         </div>
 
@@ -114,19 +87,6 @@ export default function Auth() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="rounded-xl border border-border bg-card p-6 shadow-card">
             <div className="space-y-4">
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <Input
-                    id="fullName"
-                    type="text"
-                    placeholder="John Doe"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    required={!isLogin}
-                  />
-                </div>
-              )}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -159,21 +119,20 @@ export default function Auth() {
               disabled={loading}
             >
               {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isLogin ? "Sign In" : "Create Account"}
+              Sign In
             </Button>
           </div>
         </form>
 
-        {/* Toggle */}
+        {/* B2B Notice */}
         <p className="text-center text-sm text-muted-foreground">
-          {isLogin ? "Don't have an account?" : "Already have an account?"}{" "}
-          <button
-            type="button"
-            onClick={() => setIsLogin(!isLogin)}
+          Don't have an account?{" "}
+          <a
+            href="/marketing/pricing"
             className="font-medium text-primary hover:underline"
           >
-            {isLogin ? "Sign up" : "Sign in"}
-          </button>
+            Contact Sales
+          </a>
         </p>
       </div>
     </div>
