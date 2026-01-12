@@ -1,4 +1,8 @@
 import { Toaster } from "@/components/ui/toaster";
+import NoAccess from "./pages/NoAccess";
+import SubscriptionRequired from "./pages/SubscriptionRequired";
+import AccountSuspended from "./pages/AccountSuspended";
+import ContactPage from "./pages/marketing/ContactPage";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -6,6 +10,11 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BusinessProvider } from "@/contexts/BusinessContext";
 import { ProtectedRoute, AdminRoute, OwnerRoute } from "@/components/ProtectedRoute";
+
+// Testing Hub
+import TestingHub from "./pages/TestingHub";
+
+// Client App Pages
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -24,6 +33,19 @@ import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
+// Marketing Pages
+import MarketingLayout from "./pages/marketing/MarketingLayout";
+import HomePage from "./pages/marketing/HomePage";
+import FeaturesPage from "./pages/marketing/FeaturesPage";
+import PricingPage from "./pages/marketing/PricingPage";
+
+// Super Admin Pages
+import SuperAdminLayout from "./pages/admin/SuperAdminLayout";
+import BusinessesPage from "./pages/admin/BusinessesPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import AdminLogsPage from "./pages/admin/AdminLogsPage";
+import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -35,15 +57,30 @@ const App = () => (
         <AuthProvider>
           <BusinessProvider>
             <Routes>
+              {/* Testing Hub - Development Entry Point */}
+              <Route path="/" element={<TestingHub />} />
+              
+              {/* Marketing Website */}
+              <Route path="/marketing" element={<MarketingLayout />}>
+                <Route index element={<HomePage />} />
+                <Route path="features" element={<FeaturesPage />} />
+                <Route path="pricing" element={<PricingPage />} />
+              </Route>
+
+              {/* Super Admin Panel */}
+              <Route path="/admin" element={<SuperAdminLayout />}>
+                <Route index element={<BusinessesPage />} />
+                <Route path="users" element={<AdminUsersPage />} />
+                <Route path="logs" element={<AdminLogsPage />} />
+                <Route path="settings" element={<AdminSettingsPage />} />
+              </Route>
+
+              {/* Client POS Application */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/onboarding" element={<Onboarding />} />
-              
-              {/* Public routes for all authenticated users */}
-              <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+              <Route path="/app" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
               <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-              
-              {/* Admin-only routes */}
               <Route path="/categories" element={<AdminRoute><Categories /></AdminRoute>} />
               <Route path="/inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
               <Route path="/warehouses" element={<AdminRoute><Warehouses /></AdminRoute>} />
@@ -53,8 +90,6 @@ const App = () => (
               <Route path="/suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
               <Route path="/purchase-orders" element={<AdminRoute><PurchaseOrders /></AdminRoute>} />
               <Route path="/audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
-              
-              {/* Owner-only routes */}
               <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
               <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
               

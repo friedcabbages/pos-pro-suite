@@ -81,113 +81,124 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     setWarehouses([]);
   }, []);
 
-  const fetchBusinessData = useCallback(async () => {
-    // Prevent concurrent fetches
-    if (fetchingRef.current) {
-      console.log('[Business] Fetch already in progress, skipping');
-      return;
-    }
+const fetchBusinessData = useCallback(async () => {
+  if (fetchingRef.current) {
+    console.log('[Business] Fetch already in progress, skipping');
+    return;
+  }
 
-    if (!user) {
-      console.log('[Business] No user, clearing state');
-      clearBusiness();
-      setLoading(false);
-      return;
-    }
+  if (!user) {
+    console.log('[Business] No user, clearing state');
+    clearBusiness();
+    setLoading(false);
+    return;
+  }
 
-    // Skip if we already fetched for this user
-    if (lastUserIdRef.current === user.id && business !== null) {
-      console.log('[Business] Already fetched for this user');
-      setLoading(false);
-      return;
-    }
+  fetchingRef.current = true;
+  setLoading(true);
+  console.log('[Business] Fetching data for user:', user.id);
 
-    fetchingRef.current = true;
-    setLoading(true);
-    console.log('[Business] Fetching data for user:', user.id);
+  try {
+    // 1. Check super admin first
+    const { data: adminCheck, error: adminErr } =
+      await supabase.functions.invoke('admin-actions', {
+        body: { action: 'check_super_admin' },
+      });
 
-    try {
-      // Get user role
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+    if (!adminErr && adminCheck?.is_super_admin) {
+      console.log('[Business] Super admin detected, skipping business context');
 
-      if (roleError) {
-        console.error('[Business] Role fetch error:', roleError);
-        setLoading(false);
-        fetchingRef.current = false;
-        return;
-      }
-
-      if (!roleData) {
-        console.log('[Business] No role found - user needs onboarding');
-        clearBusiness();
-        lastUserIdRef.current = user.id;
-        setLoading(false);
-        fetchingRef.current = false;
-        return;
-      }
-
-      setUserRole(roleData as UserRole);
-
-      // Get business
-      const { data: businessData, error: businessError } = await supabase
-        .from('businesses')
-        .select('*')
-        .eq('id', roleData.business_id)
-        .single();
-
-      if (businessError || !businessData) {
-        console.error('[Business] Business fetch error:', businessError);
-        clearBusiness();
-        lastUserIdRef.current = user.id;
-        setLoading(false);
-        fetchingRef.current = false;
-        return;
-      }
-
-      console.log('[Business] Found business:', businessData.name);
-      setBusiness(businessData as Business);
-
-      // Get all branches for this business
-      const { data: branchesData } = await supabase
-        .from('branches')
-        .select('*')
-        .eq('business_id', businessData.id)
-        .eq('is_active', true);
-
-      if (branchesData && branchesData.length > 0) {
-        setBranches(branchesData as Branch[]);
-        
-        // Set default branch
-        const defaultBranch = roleData.branch_id 
-          ? branchesData.find(b => b.id === roleData.branch_id) || branchesData[0]
-          : branchesData[0];
-        setBranch(defaultBranch as Branch);
-
-        // Get warehouses for the selected branch
-        const { data: warehousesData } = await supabase
-          .from('warehouses')
-          .select('*')
-          .eq('branch_id', defaultBranch.id)
-          .eq('is_active', true);
-
-        if (warehousesData && warehousesData.length > 0) {
-          setWarehouses(warehousesData as Warehouse[]);
-          setWarehouse(warehousesData[0] as Warehouse);
-        }
-      }
+      // Super admin does not need business context
+      setUserRole(null);
+      setBusiness(null);
+      setBranch(null);
+      setWarehouse(null);
+      setBranches([]);
+      setWarehouses([]);
 
       lastUserIdRef.current = user.id;
-    } catch (error) {
-      console.error('[Business] Unexpected error:', error);
-    } finally {
-      setLoading(false);
-      fetchingRef.current = false;
+      return;
     }
-  }, [user, business, clearBusiness]);
+
+    // 2. Normal user flow
+    const { data: roleData, error: roleError } = await supabase
+      .from('user_roles')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+
+    if (roleError) {
+      console.error('[Business] Role fetch error:', roleError);
+      return;
+    }
+
+    if (!roleData) {
+      console.log('[Business] No role found - user needs onboarding');
+      clearBusiness();
+      lastUserIdRef.current = user.id;
+      return;
+    }
+
+    setUserRole(roleData as UserRole);
+
+    // Get business
+    const { data: businessData, error: businessError } = await supabase
+      .from('businesses')
+      .select('*')
+      .eq('id', roleData.business_id)
+      .single();
+
+    if (businessError || !businessData) {
+      console.error('[Business] Business fetch error:', businessError);
+      clearBusiness();
+      lastUserIdRef.current = user.id;
+      return;
+    }
+
+    console.log('[Business] Found business:', businessData.name);
+    setBusiness(businessData as Business);
+
+    // Get all branches for this business
+    const { data: branchesData } = await supabase
+      .from('branches')
+      .select('*')
+      .eq('business_id', businessData.id)
+      .eq('is_active', true);
+
+    if (branchesData && branchesData.length > 0) {
+      setBranches(branchesData as Branch[]);
+
+      const defaultBranch = roleData.branch_id
+        ? branchesData.find(b => b.id === roleData.branch_id) || branchesData[0]
+        : branchesData[0];
+
+      setBranch(defaultBranch as Branch);
+
+      // Get warehouses for the selected branch
+      const { data: warehousesData } = await supabase
+        .from('warehouses')
+        .select('*')
+        .eq('branch_id', defaultBranch.id)
+        .eq('is_active', true);
+
+      if (warehousesData && warehousesData.length > 0) {
+        setWarehouses(warehousesData as Warehouse[]);
+        setWarehouse(warehousesData[0] as Warehouse);
+      } else {
+        setWarehouses([]);
+        setWarehouse(null);
+      }
+    }
+
+    lastUserIdRef.current = user.id;
+  } catch (error) {
+    console.error('[Business] Unexpected error:', error);
+  } finally {
+    setLoading(false);
+    fetchingRef.current = false;
+  }
+}, [user, clearBusiness]);
+
 
   // Only fetch when auth is ready and user changes
   useEffect(() => {
