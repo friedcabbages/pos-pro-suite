@@ -2,6 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import NoAccess from "./pages/NoAccess";
 import SubscriptionRequired from "./pages/SubscriptionRequired";
 import AccountSuspended from "./pages/AccountSuspended";
+import AccessDenied from "./pages/AccessDenied";
 import ContactPage from "./pages/marketing/ContactPage";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -65,6 +66,7 @@ const App = () => (
                 <Route index element={<HomePage />} />
                 <Route path="features" element={<FeaturesPage />} />
                 <Route path="pricing" element={<PricingPage />} />
+                <Route path="contact" element={<ContactPage />} />
               </Route>
 
               {/* Super Admin Panel */}
@@ -75,9 +77,15 @@ const App = () => (
                 <Route path="settings" element={<AdminSettingsPage />} />
               </Route>
 
-              {/* Client POS Application */}
+              {/* Authentication & Status Pages */}
               <Route path="/auth" element={<Auth />} />
               <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/no-access" element={<NoAccess />} />
+              <Route path="/subscription-required" element={<SubscriptionRequired />} />
+              <Route path="/account-suspended" element={<AccountSuspended />} />
+              <Route path="/access-denied" element={<AccessDenied />} />
+
+              {/* Client POS Application */}
               <Route path="/app" element={<ProtectedRoute><Index /></ProtectedRoute>} />
               <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
               <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
@@ -93,6 +101,7 @@ const App = () => (
               <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
               <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
               
+              {/* 404 - Catch all */}
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BusinessProvider>

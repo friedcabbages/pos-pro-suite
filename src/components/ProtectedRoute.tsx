@@ -10,7 +10,7 @@ interface ProtectedRouteProps {
 }
 
 // Routes that cashiers can access
-const CASHIER_ALLOWED_ROUTES = ['/pos', '/products', '/'];
+const CASHIER_ALLOWED_ROUTES = ['/pos', '/products', '/app'];
 
 export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedRouteProps) {
   const { user, loading: authLoading, initialized: authInitialized } = useAuth();
@@ -21,6 +21,7 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     isCashier, 
     isAdmin, 
     isOwner,
+    isSuperAdmin,
     businessStatus,
     isSubscriptionActive,
     isTrialExpired
@@ -57,7 +58,17 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     );
   }
 
-  // User logged in but no business - B2B model requires admin provisioning
+  // Super admin can access /admin routes - redirect away from client routes
+  if (isSuperAdmin) {
+    // Super admins should use admin panel, not client app
+    if (!location.pathname.startsWith('/admin')) {
+      console.log('[ProtectedRoute] Super admin accessing client route, redirecting to /admin');
+      return <Navigate to="/admin" replace />;
+    }
+    return <>{children}</>;
+  }
+
+  // User logged in but no business/role - B2B model requires admin provisioning
   if (!business || !userRole) {
     console.log('[ProtectedRoute] No business/role, redirecting to /no-access');
     return <Navigate to="/no-access" replace />;
@@ -88,8 +99,8 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
   }
 
   if (requiredRole === 'owner' && !isOwner) {
-    console.log('[ProtectedRoute] Owner required, redirecting to /');
-    return <Navigate to="/" replace />;
+    console.log('[ProtectedRoute] Owner required, redirecting to /access-denied');
+    return <Navigate to="/access-denied" replace />;
   }
 
   // Cashier route restrictions
