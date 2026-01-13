@@ -1,47 +1,51 @@
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./contexts/AuthContext";
+import { BusinessProvider } from "./contexts/BusinessContext";
+import { ImpersonationProvider } from "./contexts/ImpersonationContext";
+import { ProtectedRoute, AdminRoute, OwnerRoute } from "./components/ProtectedRoute";
+import DashboardLayout from "./components/layout/DashboardLayout";
+import Index from "./pages/Index";
+import Auth from "./pages/Auth";
+import Dashboard from "./pages/Dashboard";
+import POS from "./pages/POS";
+import Products from "./pages/Products";
+import Inventory from "./pages/Inventory";
+import Transactions from "./pages/Transactions";
+import Categories from "./pages/Categories";
+import Suppliers from "./pages/Suppliers";
+import PurchaseOrders from "./pages/PurchaseOrders";
+import Warehouses from "./pages/Warehouses";
+import Expenses from "./pages/Expenses";
+import Users from "./pages/Users";
+import Settings from "./pages/Settings";
+import Reports from "./pages/Reports";
+import AuditLogs from "./pages/AuditLogs";
+import Onboarding from "./pages/Onboarding";
+import NotFound from "./pages/NotFound";
 import NoAccess from "./pages/NoAccess";
 import SubscriptionRequired from "./pages/SubscriptionRequired";
 import AccountSuspended from "./pages/AccountSuspended";
 import AccessDenied from "./pages/AccessDenied";
-import ContactPage from "./pages/marketing/ContactPage";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { BusinessProvider } from "@/contexts/BusinessContext";
-import { ProtectedRoute, AdminRoute, OwnerRoute } from "@/components/ProtectedRoute";
-
-// Testing Hub
 import TestingHub from "./pages/TestingHub";
+import SuperAdminLayout from "./pages/admin/SuperAdminLayout";
+import MissionControlDashboard from "./pages/admin/MissionControlDashboard";
+import BusinessesPage from "./pages/admin/BusinessesPage";
+import BusinessDetailPage from "./pages/admin/BusinessDetailPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import GlobalAuditPage from "./pages/admin/GlobalAuditPage";
+import SystemSettingsPage from "./pages/admin/SystemSettingsPage";
+import ImpersonationBanner from "./components/admin/ImpersonationBanner";
 
-// Client App Pages
-import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import Onboarding from "./pages/Onboarding";
-import POS from "./pages/POS";
-import Products from "./pages/Products";
-import Categories from "./pages/Categories";
-import Inventory from "./pages/Inventory";
-import Warehouses from "./pages/Warehouses";
-import Transactions from "./pages/Transactions";
-import Expenses from "./pages/Expenses";
-import Reports from "./pages/Reports";
-import Suppliers from "./pages/Suppliers";
-import PurchaseOrders from "./pages/PurchaseOrders";
-import AuditLogs from "./pages/AuditLogs";
-import Users from "./pages/Users";
-import Settings from "./pages/Settings";
-import NotFound from "./pages/NotFound";
-
-// Marketing Pages
-import MarketingLayout from "./pages/marketing/MarketingLayout";
+// Marketing pages
 import HomePage from "./pages/marketing/HomePage";
 import FeaturesPage from "./pages/marketing/FeaturesPage";
 import PricingPage from "./pages/marketing/PricingPage";
-
-// Super Admin Pages
-import SuperAdminLayout from "./pages/admin/SuperAdminLayout";
+import ContactPage from "./pages/marketing/ContactPage";
+import MarketingLayout from "./pages/marketing/MarketingLayout";
 import BusinessesPage from "./pages/admin/BusinessesPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminLogsPage from "./pages/admin/AdminLogsPage";

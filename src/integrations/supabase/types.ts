@@ -105,6 +105,42 @@ export type Database = {
           },
         ]
       }
+      broadcasts: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          message: string
+          target_businesses: string[] | null
+          title: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          message: string
+          target_businesses?: string[] | null
+          title: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          message?: string
+          target_businesses?: string[] | null
+          title?: string
+          type?: string
+        }
+        Relationships: []
+      }
       businesses: {
         Row: {
           address: string | null
@@ -117,6 +153,9 @@ export type Database = {
           owner_id: string | null
           phone: string | null
           status: Database["public"]["Enums"]["business_status"]
+          suspend_reason: string | null
+          suspended_at: string | null
+          suspended_by: string | null
           tax_rate: number | null
           trial_end_at: string | null
           updated_at: string
@@ -132,6 +171,9 @@ export type Database = {
           owner_id?: string | null
           phone?: string | null
           status?: Database["public"]["Enums"]["business_status"]
+          suspend_reason?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
           tax_rate?: number | null
           trial_end_at?: string | null
           updated_at?: string
@@ -147,6 +189,9 @@ export type Database = {
           owner_id?: string | null
           phone?: string | null
           status?: Database["public"]["Enums"]["business_status"]
+          suspend_reason?: string | null
+          suspended_at?: string | null
+          suspended_by?: string | null
           tax_rate?: number | null
           trial_end_at?: string | null
           updated_at?: string
@@ -246,6 +291,103 @@ export type Database = {
           {
             foreignKeyName: "expenses_business_id_fkey"
             columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feature_flags: {
+        Row: {
+          business_id: string
+          created_at: string
+          enabled: boolean
+          feature_key: string
+          id: string
+          metadata: Json | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          enabled?: boolean
+          feature_key: string
+          id?: string
+          metadata?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          enabled?: boolean
+          feature_key?: string
+          id?: string
+          metadata?: Json | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feature_flags_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      global_audit_logs: {
+        Row: {
+          action: string
+          actor_email: string | null
+          actor_id: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          new_value: Json | null
+          old_value: Json | null
+          target_business_id: string | null
+          target_user_id: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          new_value?: Json | null
+          old_value?: Json | null
+          target_business_id?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          new_value?: Json | null
+          old_value?: Json | null
+          target_business_id?: string | null
+          target_user_id?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "global_audit_logs_target_business_id_fkey"
+            columns: ["target_business_id"]
             isOneToOne: false
             referencedRelation: "businesses"
             referencedColumns: ["id"]
@@ -909,6 +1051,59 @@ export type Database = {
           },
         ]
       }
+      subscription_history: {
+        Row: {
+          action: string
+          business_id: string
+          changed_by: string | null
+          created_at: string
+          from_plan: string | null
+          from_status: string | null
+          id: string
+          notes: string | null
+          reason: string | null
+          to_plan: string | null
+          to_status: string | null
+          trial_days_added: number | null
+        }
+        Insert: {
+          action: string
+          business_id: string
+          changed_by?: string | null
+          created_at?: string
+          from_plan?: string | null
+          from_status?: string | null
+          id?: string
+          notes?: string | null
+          reason?: string | null
+          to_plan?: string | null
+          to_status?: string | null
+          trial_days_added?: number | null
+        }
+        Update: {
+          action?: string
+          business_id?: string
+          changed_by?: string | null
+          created_at?: string
+          from_plan?: string | null
+          from_status?: string | null
+          id?: string
+          notes?: string | null
+          reason?: string | null
+          to_plan?: string | null
+          to_status?: string | null
+          trial_days_added?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subscription_history_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       super_admins: {
         Row: {
           created_at: string
@@ -982,6 +1177,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      system_settings: {
+        Row: {
+          created_at: string
+          id: string
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
