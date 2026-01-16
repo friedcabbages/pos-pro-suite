@@ -7,7 +7,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { BusinessProvider } from "./contexts/BusinessContext";
 import { ImpersonationProvider } from "./contexts/ImpersonationContext";
 import { ProtectedRoute, AdminRoute, OwnerRoute } from "./components/ProtectedRoute";
-import DashboardLayout from "./components/layout/DashboardLayout";
+import { DashboardLayout } from "./components/layout/DashboardLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
@@ -46,8 +46,6 @@ import FeaturesPage from "./pages/marketing/FeaturesPage";
 import PricingPage from "./pages/marketing/PricingPage";
 import ContactPage from "./pages/marketing/ContactPage";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
-import BusinessesPage from "./pages/admin/BusinessesPage";
-import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminLogsPage from "./pages/admin/AdminLogsPage";
 import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
 

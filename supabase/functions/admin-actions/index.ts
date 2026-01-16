@@ -112,7 +112,7 @@ serve(async (req) => {
         const userIds = roles?.map(r => r.user_id) || [];
         const { data: profiles } = await adminClient.from("profiles").select("id, full_name, phone").in("id", userIds);
         const { data: authUsers } = await adminClient.auth.admin.listUsers();
-        const emailMap = new Map(authUsers?.users?.map(u => [u.id, { email: u.email, banned: u.banned_until !== null }]) || []);
+        const emailMap = new Map(authUsers?.users?.map(u => [u.id, { email: u.email, banned: (u as any).banned_until !== null }]) || []);
         const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
         const users = roles?.map(role => ({ ...role, profile: profileMap.get(role.user_id), email: emailMap.get(role.user_id)?.email, disabled: emailMap.get(role.user_id)?.banned }));
         return new Response(JSON.stringify({ users }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
