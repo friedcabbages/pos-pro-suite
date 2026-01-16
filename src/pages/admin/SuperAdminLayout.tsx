@@ -10,32 +10,69 @@ import {
   ChevronRight,
   Loader2,
   AlertTriangle,
-  LayoutDashboard
+  LayoutDashboard,
+  ShieldX
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from '@/contexts/AuthContext';
-import { useSuperAdminCheck } from '@/hooks/useSuperAdmin';
+import { useSuperAdminCheck } from '@/hooks/useSuperAdminCheck';
 import { useBusiness } from "@/contexts/BusinessContext";
+import { supabase } from '@/integrations/supabase/client';
 
-
+/**
+ * SuperAdminLayout - SECURITY CRITICAL
+ * 
+ * This layout ONLY renders for users who are confirmed super admins.
+ * 
+ * Security checks:
+ * 1. User must be authenticated (via AuthContext)
+ * 2. User must have entry in super_admins table (verified via edge function)
+ * 3. All checks happen BEFORE any admin UI is rendered
+ * 
+ * NEVER:
+ * - Check email domain for access
+ * - Allow access if check fails
+ * - Render admin UI during loading
+ */
 export default function SuperAdminLayout() {
-  const [collapsed, setCollapsed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const [loggingOut, setLoggingOut] = useState(false);
   const { user, signOut, loading: authLoading, initialized: authInitialized } = useAuth();
-  const { data: isSuperAdmin, isLoading: checkingAdmin, error } = useSuperAdminCheck();
-  const { clearBusiness, userRole, isAdmin, isOwner, isCashier } = useBusiness();
+  const { data: isSuperAdmin, isLoading: checkingAdmin, error: superAdminError, isFetched } = useSuperAdminCheck();
+  const { clearBusiness } = useBusiness();
+  const [accessDeniedLogged, setAccessDeniedLogged] = useState(false);
 
-    const handleLogout = async () => {
+  // Log access denied attempts for security auditing
+  useEffect(() => {
+    if (isFetched && !checkingAdmin && !isSuperAdmin && user && !accessDeniedLogged) {
+      console.warn('[SuperAdminLayout] SECURITY: Non-super-admin attempted to access /admin:', user.email);
+      setAccessDeniedLogged(true);
+      
+      // Log to global audit (fire and forget)
+      supabase.functions.invoke('admin-actions', {
+        body: { 
+          action: 'log_access_denied',
+          payload: { 
+            attempted_path: location.pathname,
+            user_email: user.email 
+          }
+        }
+      }).catch(() => {
+        // Ignore errors - this is just audit logging
+      });
+    }
+  }, [isFetched, checkingAdmin, isSuperAdmin, user, location.pathname, accessDeniedLogged]);
+
+  const handleLogout = async () => {
     setLoggingOut(true);
     try {
       clearBusiness();
       await signOut();
       navigate("/auth", { replace: true });
     } catch (error) {
-      console.error('[Sidebar] Logout error:', error);
+      console.error('[SuperAdminLayout] Logout error:', error);
     } finally {
       setLoggingOut(false);
     }
@@ -56,55 +93,70 @@ export default function SuperAdminLayout() {
     return location.pathname.startsWith(path);
   };
 
-  // Wait for auth to initialize
+  // SECURITY: Wait for auth to initialize - show nothing
   if (!authInitialized || authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           <p className="text-sm text-muted-foreground">Checking authentication...</p>
         </div>
       </div>
     );
   }
 
-  // Not logged in - redirect to auth
+  // SECURITY: No user - redirect to auth immediately
   if (!user) {
+    console.log('[SuperAdminLayout] No user, redirecting to /auth');
     return <Navigate to="/auth" state={{ from: location }} replace />;
   }
 
-  // Checking super admin status
-  if (checkingAdmin) {
+  // SECURITY: Still checking super admin status - show loading, NOT admin UI
+  if (checkingAdmin || !isFetched) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 animate-spin text-destructive" />
-          <p className="text-sm text-muted-foreground">Verifying super admin access...</p>
+          <Shield className="h-8 w-8 text-muted-foreground animate-pulse" />
+          <p className="text-sm text-muted-foreground">Verifying admin access...</p>
         </div>
       </div>
     );
   }
 
-  // Not a super admin
-  if (!isSuperAdmin) {
+  // SECURITY: Check error or not super admin - HARD BLOCK
+  // This includes: error from API, false from API, or any other non-true value
+  if (superAdminError || isSuperAdmin !== true) {
+    console.warn('[SuperAdminLayout] Access denied - isSuperAdmin:', isSuperAdmin, 'error:', superAdminError);
+    
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4 text-center">
-          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center">
-            <AlertTriangle className="h-8 w-8 text-destructive" />
+        <div className="flex flex-col items-center gap-4 text-center p-6">
+          <div className="w-20 h-20 bg-destructive/10 rounded-full flex items-center justify-center">
+            <ShieldX className="h-10 w-10 text-destructive" />
           </div>
-          <h1 className="text-2xl font-bold">Access Denied</h1>
-          <p className="text-muted-foreground max-w-sm">
-            You don't have super admin privileges to access this area. 
-            This incident has been logged.
+          <h1 className="text-2xl font-bold text-foreground">Access Denied</h1>
+          <p className="text-muted-foreground max-w-md">
+            You do not have super admin privileges. 
+            This area is restricted to authorized personnel only.
           </p>
-          <Button onClick={() => navigate('/')}>
-            Return to Home
-          </Button>
+          <p className="text-xs text-muted-foreground">
+            This access attempt has been logged for security review.
+          </p>
+          <div className="flex gap-3 mt-4">
+            <Button variant="outline" onClick={() => navigate('/')}>
+              Go to Home
+            </Button>
+            <Button onClick={handleLogout}>
+              Sign Out
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
+
+  // SECURITY: Only reach here if isSuperAdmin === true
+  console.log('[SuperAdminLayout] Super admin verified, rendering admin UI');
 
   return (
     <div className="min-h-screen bg-background flex">

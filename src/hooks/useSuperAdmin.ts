@@ -80,6 +80,8 @@ interface CreateBusinessPayload {
 }
 
 // Check if current user is super admin
+// DEPRECATED: Use useSuperAdminCheck from @/hooks/useSuperAdminCheck instead
+// This is kept for backwards compatibility with existing code
 export function useSuperAdminCheck() {
   return useQuery({
     queryKey: ['super-admin-check'],
@@ -87,10 +89,16 @@ export function useSuperAdminCheck() {
       const { data, error } = await supabase.functions.invoke('admin-actions', {
         body: { action: 'check_super_admin' },
       });
-      if (error) throw error;
-      return data.is_super_admin as boolean;
+      // On error, return false (fail closed)
+      if (error) {
+        console.error('[useSuperAdminCheck] Error:', error);
+        return false;
+      }
+      return data?.is_super_admin === true;
     },
     staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    retry: 1,
+    placeholderData: false,
   });
 }
 

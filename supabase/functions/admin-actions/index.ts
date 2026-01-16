@@ -78,8 +78,25 @@ serve(async (req) => {
     };
 
     switch (action) {
+      // This action is allowed for any authenticated user (to check their own status)
       case "check_super_admin":
         return new Response(JSON.stringify({ is_super_admin: isSuperAdmin }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+      // Log access denied attempts - allowed for any authenticated user
+      case "log_access_denied": {
+        const { attempted_path, user_email } = payload || {};
+        console.warn("SECURITY: Access denied attempt logged:", { user_id: user.id, user_email, attempted_path });
+        // Log to global audit (even non-super admins can log their own access denied)
+        await adminClient.from("global_audit_logs").insert({
+          actor_id: user.id,
+          actor_email: user.email,
+          action: 'access_denied',
+          entity_type: 'admin_panel',
+          entity_id: attempted_path,
+          new_value: { attempted_path, user_email, timestamp: new Date().toISOString() },
+        });
+        return new Response(JSON.stringify({ logged: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
 
       case "list_businesses": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });

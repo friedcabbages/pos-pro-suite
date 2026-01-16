@@ -58,14 +58,14 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     );
   }
 
-  // Super admin can access /admin routes - redirect away from client routes
+  // Super admin detection - do NOT auto-redirect them anywhere
+  // Super admins who want to access /admin routes should go there directly
+  // Super admins accessing client routes will be treated as having no business (which is correct)
+  // The SuperAdminLayout handles /admin route protection separately
   if (isSuperAdmin) {
-    // Super admins should use admin panel, not client app
-    if (!location.pathname.startsWith('/admin')) {
-      console.log('[ProtectedRoute] Super admin accessing client route, redirecting to /admin');
-      return <Navigate to="/admin" replace />;
-    }
-    return <>{children}</>;
+    console.log('[ProtectedRoute] Super admin detected accessing client route');
+    // Super admins don't have a business context, so they'll hit the "no business/role" check below
+    // This is intentional - super admins should use /admin, not client routes
   }
 
   // User logged in but no business/role - B2B model requires admin provisioning
