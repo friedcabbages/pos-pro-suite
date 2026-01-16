@@ -46,8 +46,6 @@ import FeaturesPage from "./pages/marketing/FeaturesPage";
 import PricingPage from "./pages/marketing/PricingPage";
 import ContactPage from "./pages/marketing/ContactPage";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
-import AdminLogsPage from "./pages/admin/AdminLogsPage";
-import AdminSettingsPage from "./pages/admin/AdminSettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -58,55 +56,60 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <BusinessProvider>
-            <Routes>
-              {/* Testing Hub - Development Entry Point */}
-              <Route path="/" element={<TestingHub />} />
-              
-              {/* Marketing Website */}
-              <Route path="/marketing" element={<MarketingLayout />}>
-                <Route index element={<HomePage />} />
-                <Route path="features" element={<FeaturesPage />} />
-                <Route path="pricing" element={<PricingPage />} />
-                <Route path="contact" element={<ContactPage />} />
-              </Route>
+          <ImpersonationProvider>
+            <BusinessProvider>
+              <ImpersonationBanner />
+              <Routes>
+                {/* Testing Hub - Development Entry Point */}
+                <Route path="/" element={<TestingHub />} />
+                
+                {/* Marketing Website */}
+                <Route path="/marketing" element={<MarketingLayout />}>
+                  <Route index element={<HomePage />} />
+                  <Route path="features" element={<FeaturesPage />} />
+                  <Route path="pricing" element={<PricingPage />} />
+                  <Route path="contact" element={<ContactPage />} />
+                </Route>
 
-              {/* Super Admin Panel */}
-              <Route path="/admin" element={<SuperAdminLayout />}>
-                <Route index element={<BusinessesPage />} />
-                <Route path="users" element={<AdminUsersPage />} />
-                <Route path="logs" element={<AdminLogsPage />} />
-                <Route path="settings" element={<AdminSettingsPage />} />
-              </Route>
+                {/* Super Admin Panel - Mission Control */}
+                <Route path="/admin" element={<SuperAdminLayout />}>
+                  <Route index element={<MissionControlDashboard />} />
+                  <Route path="businesses" element={<BusinessesPage />} />
+                  <Route path="businesses/:businessId" element={<BusinessDetailPage />} />
+                  <Route path="users" element={<AdminUsersPage />} />
+                  <Route path="logs" element={<GlobalAuditPage />} />
+                  <Route path="settings" element={<SystemSettingsPage />} />
+                </Route>
 
-              {/* Authentication & Status Pages */}
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/no-access" element={<NoAccess />} />
-              <Route path="/subscription-required" element={<SubscriptionRequired />} />
-              <Route path="/account-suspended" element={<AccountSuspended />} />
-              <Route path="/access-denied" element={<AccessDenied />} />
+                {/* Authentication & Status Pages */}
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/no-access" element={<NoAccess />} />
+                <Route path="/subscription-required" element={<SubscriptionRequired />} />
+                <Route path="/account-suspended" element={<AccountSuspended />} />
+                <Route path="/access-denied" element={<AccessDenied />} />
 
-              {/* Client POS Application */}
-              <Route path="/app" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-              <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
-              <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-              <Route path="/categories" element={<AdminRoute><Categories /></AdminRoute>} />
-              <Route path="/inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
-              <Route path="/warehouses" element={<AdminRoute><Warehouses /></AdminRoute>} />
-              <Route path="/transactions" element={<AdminRoute><Transactions /></AdminRoute>} />
-              <Route path="/expenses" element={<AdminRoute><Expenses /></AdminRoute>} />
-              <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
-              <Route path="/suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
-              <Route path="/purchase-orders" element={<AdminRoute><PurchaseOrders /></AdminRoute>} />
-              <Route path="/audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
-              <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
-              <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
-              
-              {/* 404 - Catch all */}
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BusinessProvider>
+                {/* Client POS Application */}
+                <Route path="/app" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+                <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+                <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+                <Route path="/categories" element={<AdminRoute><Categories /></AdminRoute>} />
+                <Route path="/inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
+                <Route path="/warehouses" element={<AdminRoute><Warehouses /></AdminRoute>} />
+                <Route path="/transactions" element={<AdminRoute><Transactions /></AdminRoute>} />
+                <Route path="/expenses" element={<AdminRoute><Expenses /></AdminRoute>} />
+                <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
+                <Route path="/suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
+                <Route path="/purchase-orders" element={<AdminRoute><PurchaseOrders /></AdminRoute>} />
+                <Route path="/audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
+                <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
+                <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
+                
+                {/* 404 - Catch all */}
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BusinessProvider>
+          </ImpersonationProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

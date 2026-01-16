@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,9 +28,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Building2, Search, MoreHorizontal, Eye, Ban, CheckCircle, UserCog, Users, DollarSign, Plus, Clock, XCircle, Play } from 'lucide-react';
+import { Building2, Search, MoreHorizontal, Eye, Ban, CheckCircle, UserCog, Users, DollarSign, Plus, Clock, XCircle, Play, ExternalLink } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { useAdminBusinesses, useAdminAction, useSystemStats, useCreateBusinessWithOwner } from '@/hooks/useSuperAdmin';
+import { useImpersonation } from '@/contexts/ImpersonationContext';
 
 type BusinessStatus = 'trial' | 'active' | 'expired' | 'suspended';
 
@@ -51,9 +53,11 @@ interface Business {
 }
 
 export default function BusinessesPage() {
+  const navigate = useNavigate();
+  const { startImpersonation } = useImpersonation();
   const [search, setSearch] = useState('');
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
-  const [dialogAction, setDialogAction] = useState<'view' | 'suspend' | 'activate' | 'expire' | 'start_trial' | 'impersonate' | 'create' | null>(null);
+  const [dialogAction, setDialogAction] = useState<'suspend' | 'activate' | 'expire' | 'start_trial' | 'create' | null>(null);
   const [createForm, setCreateForm] = useState({
     business_name: '',
     owner_email: '',
@@ -73,6 +77,17 @@ export default function BusinessesPage() {
     b.owner?.full_name?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const handleViewDetails = (business: Business) => {
+    navigate(`/admin/businesses/${business.id}`);
+  };
+
+  const handleImpersonate = (business: Business) => {
+    if (business.owner_id) {
+      startImpersonation(business.id, business.name, business.owner_id);
+      navigate('/app');
+    }
+  };
+
   const handleAction = (business: Business, action: typeof dialogAction) => {
     setSelectedBusiness(business);
     setDialogAction(action);
@@ -80,11 +95,6 @@ export default function BusinessesPage() {
 
   const confirmAction = () => {
     if (!selectedBusiness || !dialogAction) return;
-    
-    if (dialogAction === 'view') {
-      setDialogAction(null);
-      return;
-    }
 
     adminAction.mutate(
       { action: dialogAction, businessId: selectedBusiness.id },
@@ -224,7 +234,12 @@ export default function BusinessesPage() {
                           <Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => handleAction(business, 'view')}><Eye className="h-4 w-4 mr-2" />View Details</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleViewDetails(business)}>
+                            <Eye className="h-4 w-4 mr-2" />View Details
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleImpersonate(business)} disabled={!business.owner_id}>
+                            <UserCog className="h-4 w-4 mr-2" />Impersonate Owner
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {business.status !== 'active' && (
                             <DropdownMenuItem onClick={() => handleAction(business, 'activate')}><CheckCircle className="h-4 w-4 mr-2" />Activate</DropdownMenuItem>
@@ -238,8 +253,6 @@ export default function BusinessesPage() {
                           {business.status !== 'suspended' && (
                             <DropdownMenuItem onClick={() => handleAction(business, 'suspend')} className="text-destructive"><Ban className="h-4 w-4 mr-2" />Suspend</DropdownMenuItem>
                           )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleAction(business, 'impersonate')}><UserCog className="h-4 w-4 mr-2" />Impersonate Owner</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -290,29 +303,23 @@ export default function BusinessesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {dialogAction === 'view' && 'Business Details'}
               {dialogAction === 'suspend' && 'Suspend Business'}
               {dialogAction === 'activate' && 'Activate Business'}
               {dialogAction === 'expire' && 'Expire Business'}
               {dialogAction === 'start_trial' && 'Start Trial'}
-              {dialogAction === 'impersonate' && 'Impersonate Owner'}
             </DialogTitle>
+            <DialogDescription>
+              {dialogAction === 'suspend' && `Are you sure you want to suspend ${selectedBusiness?.name}?`}
+              {dialogAction === 'activate' && `Are you sure you want to activate ${selectedBusiness?.name}?`}
+              {dialogAction === 'expire' && `Are you sure you want to expire ${selectedBusiness?.name}?`}
+              {dialogAction === 'start_trial' && `Start a 7-day trial for ${selectedBusiness?.name}?`}
+            </DialogDescription>
           </DialogHeader>
-          {dialogAction === 'view' && selectedBusiness && (
-            <div className="grid grid-cols-2 gap-4">
-              <div><label className="text-sm text-muted-foreground">Business Name</label><p className="font-medium">{selectedBusiness.name}</p></div>
-              <div><label className="text-sm text-muted-foreground">Status</label><p>{getStatusBadge(selectedBusiness)}</p></div>
-              <div><label className="text-sm text-muted-foreground">Owner</label><p className="font-medium">{selectedBusiness.owner?.full_name || '-'}</p></div>
-              <div><label className="text-sm text-muted-foreground">Trial Ends</label><p className="font-medium">{selectedBusiness.trial_end_at ? format(new Date(selectedBusiness.trial_end_at), 'PPp') : '-'}</p></div>
-            </div>
-          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogAction(null)}>{dialogAction === 'view' ? 'Close' : 'Cancel'}</Button>
-            {dialogAction !== 'view' && (
-              <Button variant={dialogAction === 'suspend' ? 'destructive' : 'default'} onClick={confirmAction} disabled={adminAction.isPending}>
-                {adminAction.isPending ? 'Processing...' : 'Confirm'}
-              </Button>
-            )}
+            <Button variant="outline" onClick={() => setDialogAction(null)}>Cancel</Button>
+            <Button variant={dialogAction === 'suspend' ? 'destructive' : 'default'} onClick={confirmAction} disabled={adminAction.isPending}>
+              {adminAction.isPending ? 'Processing...' : 'Confirm'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

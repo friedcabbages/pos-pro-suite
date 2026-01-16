@@ -140,7 +140,7 @@ export default function BusinessDetailPage() {
   const handleImpersonate = () => {
     if (business.owner_id) {
       startImpersonation(business.id, business.name, business.owner_id);
-      navigate('/hub');
+      navigate('/app');
     }
   };
 
@@ -223,7 +223,7 @@ export default function BusinessDetailPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate('/admin')}>
+        <Button variant="ghost" size="icon" onClick={() => navigate('/admin/businesses')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
