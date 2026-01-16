@@ -9,7 +9,8 @@ import {
   LogOut,
   ChevronRight,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  LayoutDashboard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from "react";
@@ -41,7 +42,8 @@ export default function SuperAdminLayout() {
   };
 
   const navItems = [
-    { label: 'Businesses', path: '/admin', icon: Building2 },
+    { label: 'Dashboard', path: '/admin', icon: LayoutDashboard },
+    { label: 'Businesses', path: '/admin/businesses', icon: Building2 },
     { label: 'Users', path: '/admin/users', icon: Users },
     { label: 'Audit Logs', path: '/admin/logs', icon: FileText },
     { label: 'Settings', path: '/admin/settings', icon: Settings },
