@@ -1,4 +1,4 @@
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, Receipt } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useRecentTransactions } from "@/hooks/useDashboard";
@@ -49,14 +49,32 @@ export function RecentTransactions() {
           <h3 className="text-lg font-semibold text-foreground">Recent Transactions</h3>
           <p className="text-sm text-muted-foreground">Latest sales activity</p>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => navigate("/transactions")}>
-          View all
-        </Button>
+        {transactions && transactions.length > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => navigate("/transactions")}>
+            View all
+          </Button>
+        )}
       </div>
 
       {!transactions || transactions.length === 0 ? (
-        <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-          No transactions yet
+        <div className="flex flex-col items-center justify-center h-[200px] text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
+            <Receipt className="h-7 w-7 text-primary" />
+          </div>
+          <h4 className="text-sm font-medium text-foreground mb-1">
+            No transactions yet
+          </h4>
+          <p className="text-xs text-muted-foreground max-w-[220px] mb-4">
+            Your recent sales will appear here. Start selling to see activity.
+          </p>
+          <Button 
+            size="sm"
+            onClick={() => navigate('/pos')}
+            className="gap-1.5"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Open POS
+          </Button>
         </div>
       ) : (
         <div className="space-y-4">

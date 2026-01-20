@@ -10,10 +10,14 @@ import {
 import { useSalesChart } from "@/hooks/useDashboard";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { ShoppingCart, TrendingUp } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export function SalesChart() {
   const { data: chartData, isLoading } = useSalesChart();
   const { business } = useBusiness();
+  const navigate = useNavigate();
 
   const formatCurrency = (value: number) => {
     const currency = business?.currency || 'USD';
@@ -34,6 +38,7 @@ export function SalesChart() {
   }
 
   const data = chartData || [];
+  const hasData = data.some(d => d.sales > 0);
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 shadow-card">
@@ -42,17 +47,34 @@ export function SalesChart() {
           <h3 className="text-lg font-semibold text-foreground">Sales Overview</h3>
           <p className="text-sm text-muted-foreground">Last 7 days performance</p>
         </div>
-        <div className="flex gap-4 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full bg-primary" />
-            <span className="text-muted-foreground">Sales</span>
+        {hasData && (
+          <div className="flex gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-primary" />
+              <span className="text-muted-foreground">Sales</span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {data.length === 0 ? (
-        <div className="flex h-[250px] items-center justify-center text-muted-foreground">
-          No sales data available
+      {!hasData ? (
+        <div className="flex flex-col items-center justify-center h-[250px] text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+            <TrendingUp className="h-8 w-8 text-primary" />
+          </div>
+          <h4 className="text-base font-medium text-foreground mb-2">
+            No sales yet
+          </h4>
+          <p className="text-sm text-muted-foreground max-w-[280px] mb-4">
+            Start your first transaction to see performance trends here.
+          </p>
+          <Button 
+            onClick={() => navigate('/pos')}
+            className="gap-2"
+          >
+            <ShoppingCart className="h-4 w-4" />
+            Open POS
+          </Button>
         </div>
       ) : (
         <div className="h-[250px]">
