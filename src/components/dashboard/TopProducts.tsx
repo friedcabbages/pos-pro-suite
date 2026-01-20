@@ -1,11 +1,14 @@
-import { TrendingUp } from "lucide-react";
+import { TrendingUp, Package, Plus } from "lucide-react";
 import { useTopProducts } from "@/hooks/useDashboard";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 
 export function TopProducts() {
   const { data: products, isLoading } = useTopProducts();
   const { business } = useBusiness();
+  const navigate = useNavigate();
 
   const formatCurrency = (value: number) => {
     const currency = business?.currency || 'USD';
@@ -37,8 +40,25 @@ export function TopProducts() {
       </div>
 
       {!products || products.length === 0 ? (
-        <div className="flex h-[200px] items-center justify-center text-muted-foreground">
-          No sales data yet
+        <div className="flex flex-col items-center justify-center h-[200px] text-center">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-primary/10 mb-4">
+            <Package className="h-7 w-7 text-primary" />
+          </div>
+          <h4 className="text-sm font-medium text-foreground mb-1">
+            No sales data yet
+          </h4>
+          <p className="text-xs text-muted-foreground max-w-[200px] mb-4">
+            Your best-selling products will appear here after you make sales.
+          </p>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => navigate('/products')}
+            className="gap-1.5"
+          >
+            <Plus className="h-4 w-4" />
+            Add Product
+          </Button>
         </div>
       ) : (
         <div className="space-y-4">

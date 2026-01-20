@@ -1,9 +1,11 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { KPICard } from "@/components/dashboard/KPICard";
+import { EnhancedKPICard } from "@/components/dashboard/EnhancedKPICard";
 import { SalesChart } from "@/components/dashboard/SalesChart";
 import { TopProducts } from "@/components/dashboard/TopProducts";
 import { RecentTransactions } from "@/components/dashboard/RecentTransactions";
 import { LowStockAlert } from "@/components/dashboard/LowStockAlert";
+import { QuickActions } from "@/components/dashboard/QuickActions";
+import { DailyInsights } from "@/components/dashboard/DailyInsights";
 import { useDashboardStats, useLowStockProducts } from "@/hooks/useDashboard";
 import { useBusiness } from "@/contexts/BusinessContext";
 import {
@@ -29,6 +31,24 @@ export default function Dashboard() {
     }).format(value);
   };
 
+  // Calculate percentage changes
+  const calculatePercentageChange = (current: number, previous: number): number => {
+    if (previous === 0) return current > 0 ? 100 : 0;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const todayVsYesterday = stats 
+    ? calculatePercentageChange(stats.todaySales, stats.yesterdaySales)
+    : 0;
+
+  const monthVsLastMonth = stats
+    ? calculatePercentageChange(stats.monthlyRevenue, stats.lastMonthRevenue)
+    : 0;
+
+  const ordersVsYesterday = stats
+    ? calculatePercentageChange(stats.totalOrders, stats.yesterdayOrders)
+    : 0;
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -38,7 +58,7 @@ export default function Dashboard() {
             Dashboard
           </h1>
           <p className="text-sm text-muted-foreground">
-            Welcome back! Here's what's happening with {business?.name || 'your business'}.
+            Your store's control panel for today. Welcome back to {business?.name || 'your business'}!
           </p>
         </div>
 
@@ -52,37 +72,60 @@ export default function Dashboard() {
             </>
           ) : (
             <>
-              <KPICard
+              <EnhancedKPICard
                 title="Today's Sales"
                 value={formatCurrency(stats?.todaySales || 0)}
-                change={0}
-                changeLabel="today's revenue"
+                comparison={{
+                  value: todayVsYesterday,
+                  label: "vs yesterday",
+                  type: "percentage"
+                }}
                 icon={DollarSign}
                 variant="success"
+                tooltip="Total revenue from all sales made today, starting from midnight."
               />
-              <KPICard
+              <EnhancedKPICard
                 title="Monthly Revenue"
                 value={formatCurrency(stats?.monthlyRevenue || 0)}
-                change={8.2}
-                changeLabel="vs last month"
+                comparison={{
+                  value: monthVsLastMonth,
+                  label: "vs last month",
+                  type: "percentage"
+                }}
                 icon={TrendingUp}
+                tooltip="Total revenue accumulated this calendar month."
               />
-              <KPICard
+              <EnhancedKPICard
                 title="Today's Orders"
                 value={(stats?.totalOrders || 0).toString()}
-                change={0}
-                changeLabel="transactions"
+                comparison={{
+                  value: ordersVsYesterday,
+                  label: "vs yesterday",
+                  type: "percentage"
+                }}
                 icon={ShoppingCart}
+                tooltip="Number of completed transactions today."
               />
-              <KPICard
+              <EnhancedKPICard
                 title="Products"
                 value={(stats?.totalProducts || 0).toString()}
-                change={lowStock?.length || 0}
-                changeLabel="low stock"
+                subtitle={`${lowStock?.length || 0} low stock`}
                 icon={Package}
+                variant={(lowStock?.length || 0) > 0 ? "warning" : "default"}
+                tooltip="Total active products in your catalog. Shows count of items below minimum stock level."
               />
             </>
           )}
+        </div>
+
+        {/* Quick Actions + Daily Insights */}
+        <div className="grid gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <QuickActions />
+          </div>
+          <div>
+            <DailyInsights />
+          </div>
         </div>
 
         {/* Charts & Analytics */}
