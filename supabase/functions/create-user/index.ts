@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,13 +15,15 @@ serve(async (req) => {
   try {
     // Get environment variables
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     console.log("Edge function called, checking env vars...");
 
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !serviceRoleKey || !supabaseAnonKey) {
       console.error("Missing environment variables:", {
         hasUrl: !!supabaseUrl,
+        hasAnonKey: !!supabaseAnonKey,
         hasServiceKey: !!serviceRoleKey,
       });
       return new Response(
@@ -48,7 +50,11 @@ serve(async (req) => {
       });
     }
 
-    // Verify caller (must be authenticated)
+    // Create a user client to validate the token using getClaims
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
     const token = authHeader.split(" ")[1]?.trim();
     if (!token) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -57,17 +63,23 @@ serve(async (req) => {
       });
     }
 
-    const { data: userData, error: authError } = await adminClient.auth.getUser(token);
-    if (authError || !userData?.user) {
-      console.error("Auth error:", authError?.message ?? authError);
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      console.error("Token validation error:", claimsError?.message);
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const currentUser = userData.user;
-    console.log("Authenticated user:", currentUser.id);
+    const currentUserId = claimsData.claims.sub as string;
+    if (!currentUserId) {
+      return new Response(JSON.stringify({ error: "Unauthorized - no user id in token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    console.log("Authenticated user:", currentUserId);
 
     // Parse request body with error handling
     let body: any;
@@ -136,7 +148,7 @@ serve(async (req) => {
       });
     }
 
-    if (business.owner_id !== currentUser.id) {
+    if (business.owner_id !== currentUserId) {
       return new Response(JSON.stringify({ error: "Only business owners can create users" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

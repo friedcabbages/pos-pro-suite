@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.50.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,9 +13,10 @@ serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!supabaseUrl || !serviceRoleKey) {
+    if (!supabaseUrl || !serviceRoleKey || !supabaseAnonKey) {
       return new Response(JSON.stringify({ error: "Server configuration error" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -24,22 +25,35 @@ serve(async (req) => {
     });
 
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
+    // Create a client with the user's auth header to validate the token
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: userError } = await adminClient.auth.getUser(token);
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
     
-    if (userError || !user) {
+    if (claimsError || !claimsData?.claims) {
+      console.error("Token validation error:", claimsError?.message);
       return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const userId = claimsData.claims.sub as string;
+    const userEmail = claimsData.claims.email as string;
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Invalid token - no user id" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Check super admin from database table
     const { data: superAdminRecord } = await adminClient
       .from("super_admins")
       .select("id")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
     
     const isSuperAdmin = !!superAdminRecord;
@@ -47,13 +61,13 @@ serve(async (req) => {
     const body = await req.json();
     const { action, business_id, filters, payload } = body;
 
-    console.log("Admin action:", action, "by user:", user.email, "super admin:", isSuperAdmin);
+    console.log("Admin action:", action, "by user:", userEmail, "super admin:", isSuperAdmin);
 
     // Helper to log global audit
     const logGlobalAudit = async (actionName: string, entityType: string, entityId?: string, targetBusinessId?: string, targetUserId?: string, oldValue?: any, newValue?: any) => {
       await adminClient.from("global_audit_logs").insert({
-        actor_id: user.id,
-        actor_email: user.email,
+        actor_id: userId,
+        actor_email: userEmail,
         action: actionName,
         entity_type: entityType,
         entity_id: entityId,
@@ -68,7 +82,7 @@ serve(async (req) => {
     const logSubscriptionHistory = async (businessId: string, actionName: string, fromStatus?: string, toStatus?: string, trialDays?: number, reason?: string) => {
       await adminClient.from("subscription_history").insert({
         business_id: businessId,
-        changed_by: user.id,
+        changed_by: userId,
         action: actionName,
         from_status: fromStatus,
         to_status: toStatus,
@@ -85,11 +99,11 @@ serve(async (req) => {
       // Log access denied attempts - allowed for any authenticated user
       case "log_access_denied": {
         const { attempted_path, user_email } = payload || {};
-        console.warn("SECURITY: Access denied attempt logged:", { user_id: user.id, user_email, attempted_path });
+        console.warn("SECURITY: Access denied attempt logged:", { user_id: userId, user_email, attempted_path });
         // Log to global audit (even non-super admins can log their own access denied)
         await adminClient.from("global_audit_logs").insert({
-          actor_id: user.id,
-          actor_email: user.email,
+          actor_id: userId,
+          actor_email: userEmail,
           action: 'access_denied',
           entity_type: 'admin_panel',
           entity_id: attempted_path,
@@ -212,7 +226,7 @@ serve(async (req) => {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const reason = payload?.reason || 'No reason provided';
         const { data: business } = await adminClient.from("businesses").select("status").eq("id", business_id).single();
-        await adminClient.from("businesses").update({ status: 'suspended', suspend_reason: reason, suspended_at: new Date().toISOString(), suspended_by: user.id }).eq("id", business_id);
+        await adminClient.from("businesses").update({ status: 'suspended', suspend_reason: reason, suspended_at: new Date().toISOString(), suspended_by: userId }).eq("id", business_id);
         await logSubscriptionHistory(business_id, 'suspended', business?.status, 'suspended', undefined, reason);
         await logGlobalAudit('business_suspended', 'business', business_id, business_id, undefined, undefined, { reason });
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -279,7 +293,7 @@ serve(async (req) => {
 
       case "create_broadcast": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        await adminClient.from("broadcasts").insert({ ...payload, created_by: user.id });
+        await adminClient.from("broadcasts").insert({ ...payload, created_by: userId });
         await logGlobalAudit('broadcast_created', 'broadcast', undefined, undefined, undefined, undefined, payload);
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -299,7 +313,7 @@ serve(async (req) => {
       case "update_system_setting": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const { key, value } = payload;
-        await adminClient.from("system_settings").upsert({ key, value, updated_by: user.id, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+        await adminClient.from("system_settings").upsert({ key, value, updated_by: userId, updated_at: new Date().toISOString() }, { onConflict: 'key' });
         await logGlobalAudit('setting_updated', 'system', key, undefined, undefined, undefined, { key, value });
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -315,7 +329,7 @@ serve(async (req) => {
       case "toggle_feature_flag": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const { business_id: bizId, feature_key, enabled } = payload;
-        await adminClient.from("feature_flags").upsert({ business_id: bizId, feature_key, enabled, updated_by: user.id }, { onConflict: 'business_id,feature_key' });
+        await adminClient.from("feature_flags").upsert({ business_id: bizId, feature_key, enabled, updated_by: userId }, { onConflict: 'business_id,feature_key' });
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
