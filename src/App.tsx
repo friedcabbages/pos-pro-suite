@@ -25,6 +25,8 @@ import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
 import AuditLogs from "./pages/AuditLogs";
 import Onboarding from "./pages/Onboarding";
+import Subscription from "./pages/Subscription";
+import ActivityHistory from "./pages/ActivityHistory";
 import NotFound from "./pages/NotFound";
 import NoAccess from "./pages/NoAccess";
 import SubscriptionRequired from "./pages/SubscriptionRequired";
@@ -104,6 +106,8 @@ const App = () => (
                 <Route path="/audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
                 <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
                 <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
+                <Route path="/subscription" element={<OwnerRoute><Subscription /></OwnerRoute>} />
+                <Route path="/activity" element={<AdminRoute><ActivityHistory /></AdminRoute>} />
                 
                 {/* 404 - Catch all */}
                 <Route path="*" element={<NotFound />} />
