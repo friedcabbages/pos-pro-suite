@@ -57,10 +57,11 @@ export function useBusinessActivityLogs(filters?: {
 }
 
 // Log an activity
+// Log an activity
 export function useLogActivity() {
   const { business } = useBusiness();
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: async ({
       action,
@@ -76,22 +77,24 @@ export function useLogActivity() {
       metadata?: Record<string, unknown>;
     }) => {
       if (!business?.id) throw new Error('No business found');
-      
+
       const { data: { user } } = await supabase.auth.getUser();
-      
+
       const { error } = await supabase
         .from('business_activity_logs')
-        .insert({
-          business_id: business.id,
-          user_id: user?.id,
-          user_email: user?.email,
-          action,
-          entity_type: entityType,
-          entity_id: entityId,
-          description,
-          metadata,
-        });
-      
+        .insert([
+          {
+            business_id: business.id,
+            user_id: user?.id ?? null,
+            user_email: user?.email ?? null,
+            action,
+            entity_type: entityType,
+            entity_id: entityId ?? null,
+            description: description ?? null,
+            metadata: metadata ?? null,
+          },
+        ]);
+
       if (error) throw error;
     },
     onSuccess: () => {
@@ -99,6 +102,7 @@ export function useLogActivity() {
     },
   });
 }
+
 
 // Export data (sales, products, inventory)
 export function useExportData() {

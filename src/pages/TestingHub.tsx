@@ -2,9 +2,14 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShoppingCart, Shield, Globe, ArrowRight } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useEffect, useState } from 'react';
+
+
 
 export default function TestingHub() {
   const navigate = useNavigate();
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   const apps = [
     {
@@ -29,6 +34,23 @@ export default function TestingHub() {
       color: 'bg-success',
     },
   ];
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setIsLoggedIn(!!data.session);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-6">
@@ -69,9 +91,21 @@ export default function TestingHub() {
           ))}
         </div>
 
-        <div className="text-center text-sm text-muted-foreground">
-          <p>Architecture: Multi-tenant SaaS • Supabase Backend • RLS Enabled</p>
-        </div>
+<div className="text-center text-sm text-muted-foreground space-y-1">
+  <p>Architecture: Multi-tenant SaaS • Supabase Backend • RLS Enabled</p>
+
+  {isLoggedIn && (
+    <p
+      onClick={async () => {
+        await supabase.auth.signOut();
+        navigate('/auth');
+      }}
+      className="text-xs cursor-pointer hover:text-red-500"
+    >
+      Logout
+    </p>
+  )}
+</div>
       </div>
     </div>
   );

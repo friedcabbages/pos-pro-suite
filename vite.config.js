@@ -28,5 +28,5 @@ export default defineConfig(({ mode }) => ({
     exclude: ["lucide-react"],
   },
 
-  logLevel: "error",
+  logLevel: "info",
 }));
