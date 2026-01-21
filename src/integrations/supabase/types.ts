@@ -141,6 +141,148 @@ export type Database = {
         }
         Relationships: []
       }
+      business_activity_logs: {
+        Row: {
+          action: string
+          business_id: string
+          created_at: string
+          description: string | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          business_id: string
+          created_at?: string
+          description?: string | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          business_id?: string
+          created_at?: string
+          description?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_activity_logs_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_snapshots: {
+        Row: {
+          business_id: string
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          name: string
+          snapshot_data: Json
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          name: string
+          snapshot_data: Json
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          name?: string
+          snapshot_data?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_snapshots_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_subscriptions: {
+        Row: {
+          billing_cycle: string
+          business_id: string
+          cancel_at_period_end: boolean
+          canceled_at: string | null
+          created_at: string
+          current_period_end: string
+          current_period_start: string
+          id: string
+          plan_id: string
+          updated_at: string
+        }
+        Insert: {
+          billing_cycle?: string
+          business_id: string
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end: string
+          current_period_start?: string
+          id?: string
+          plan_id: string
+          updated_at?: string
+        }
+        Update: {
+          billing_cycle?: string
+          business_id?: string
+          cancel_at_period_end?: boolean
+          canceled_at?: string | null
+          created_at?: string
+          current_period_end?: string
+          current_period_start?: string
+          id?: string
+          plan_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "business_subscriptions_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "business_subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "subscription_plans"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       businesses: {
         Row: {
           address: string | null
@@ -540,6 +682,115 @@ export type Database = {
             columns: ["warehouse_id"]
             isOneToOne: false
             referencedRelation: "warehouses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          amount: number
+          billing_period_end: string
+          billing_period_start: string
+          business_id: string
+          created_at: string
+          currency: string
+          id: string
+          invoice_number: string
+          notes: string | null
+          paid_at: string | null
+          paid_by: string | null
+          plan_name: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          billing_period_end: string
+          billing_period_start: string
+          business_id: string
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_number: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          plan_name: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          billing_period_end?: string
+          billing_period_start?: string
+          business_id?: string
+          created_at?: string
+          currency?: string
+          id?: string
+          invoice_number?: string
+          notes?: string | null
+          paid_at?: string | null
+          paid_by?: string | null
+          plan_name?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoices_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: false
+            referencedRelation: "businesses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      onboarding_progress: {
+        Row: {
+          business_id: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          step_first_product: boolean
+          step_first_sale: boolean
+          step_initial_stock: boolean
+          step_store_info: boolean
+          updated_at: string
+          wizard_completed: boolean
+          wizard_skipped: boolean
+        }
+        Insert: {
+          business_id: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          step_first_product?: boolean
+          step_first_sale?: boolean
+          step_initial_stock?: boolean
+          step_store_info?: boolean
+          updated_at?: string
+          wizard_completed?: boolean
+          wizard_skipped?: boolean
+        }
+        Update: {
+          business_id?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          step_first_product?: boolean
+          step_first_sale?: boolean
+          step_initial_stock?: boolean
+          step_store_info?: boolean
+          updated_at?: string
+          wizard_completed?: boolean
+          wizard_skipped?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "onboarding_progress_business_id_fkey"
+            columns: ["business_id"]
+            isOneToOne: true
+            referencedRelation: "businesses"
             referencedColumns: ["id"]
           },
         ]
@@ -1103,6 +1354,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      subscription_plans: {
+        Row: {
+          created_at: string
+          display_name: string
+          features: Json
+          id: string
+          is_active: boolean
+          max_branches: number | null
+          max_products: number | null
+          max_users: number | null
+          name: string
+          price_monthly: number
+          price_yearly: number
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          features?: Json
+          id?: string
+          is_active?: boolean
+          max_branches?: number | null
+          max_products?: number | null
+          max_users?: number | null
+          name: string
+          price_monthly?: number
+          price_yearly?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          features?: Json
+          id?: string
+          is_active?: boolean
+          max_branches?: number | null
+          max_products?: number | null
+          max_users?: number | null
+          name?: string
+          price_monthly?: number
+          price_yearly?: number
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
       }
       super_admins: {
         Row: {
