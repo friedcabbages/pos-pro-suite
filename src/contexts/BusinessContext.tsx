@@ -110,28 +110,37 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
     try {
       // 1. Check super admin first
-      const { data: adminCheck, error: adminErr } =
-        await supabase.functions.invoke('admin-actions', {
-          body: { action: 'check_super_admin' },
-        });
+      // SECURITY: This check is via edge function which validates JWT and checks super_admins table
+      try {
+        const { data: adminCheck, error: adminErr } =
+          await supabase.functions.invoke('admin-actions', {
+            body: { action: 'check_super_admin' },
+          });
 
-      if (!adminErr && adminCheck?.is_super_admin) {
-        console.log('[Business] Super admin detected, skipping business context');
-        setIsSuperAdmin(true);
+        // SECURITY: Only set super admin if explicitly true (fail closed)
+        if (!adminErr && adminCheck?.is_super_admin === true) {
+          console.log('[Business] Super admin detected, skipping business context');
+          setIsSuperAdmin(true);
 
-        // Super admin does not need business context
-        setUserRole(null);
-        setBusiness(null);
-        setBranch(null);
-        setWarehouse(null);
-        setBranches([]);
-        setWarehouses([]);
+          // Super admin does not need business context
+          setUserRole(null);
+          setBusiness(null);
+          setBranch(null);
+          setWarehouse(null);
+          setBranches([]);
+          setWarehouses([]);
 
-        lastUserIdRef.current = user.id;
-        return;
+          lastUserIdRef.current = user.id;
+          return;
+        }
+        
+        // Not super admin or error - continue with normal flow
+        setIsSuperAdmin(false);
+      } catch (err) {
+        // On any error, assume NOT super admin (fail closed)
+        console.error('[Business] Super admin check failed:', err);
+        setIsSuperAdmin(false);
       }
-
-      setIsSuperAdmin(false);
 
       // 2. Normal user flow
       const { data: roleData, error: roleError } = await supabase

@@ -2,33 +2,55 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useBusiness } from '@/contexts/BusinessContext';
 
+export interface DashboardStats {
+  todaySales: number;
+  yesterdaySales: number;
+  monthlyRevenue: number;
+  lastMonthRevenue: number;
+  totalOrders: number;
+  yesterdayOrders: number;
+  totalProducts: number;
+  todayProfit: number;
+  monthlyProfit: number;
+  bestSellerToday: string | null;
+  busiestHour: number | null;
+}
+
 export function useDashboardStats() {
   const { business, branch } = useBusiness();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
   const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(today.getDate() - today.getDay());
+  const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
 
   return useQuery({
     queryKey: ['dashboard-stats', business?.id, branch?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<DashboardStats> => {
       if (!business?.id) {
         return {
           todaySales: 0,
+          yesterdaySales: 0,
           monthlyRevenue: 0,
+          lastMonthRevenue: 0,
           totalOrders: 0,
+          yesterdayOrders: 0,
           totalProducts: 0,
           todayProfit: 0,
-          monthlyProfit: 0
+          monthlyProfit: 0,
+          bestSellerToday: null,
+          busiestHour: null
         };
       }
 
       // Today's sales
       let todayQuery = supabase
         .from('sales')
-        .select('total, items:sale_items(profit)')
+        .select('total, created_at, items:sale_items(profit, quantity, product:products(name))')
         .eq('business_id', business.id)
         .gte('created_at', today.toISOString());
 
@@ -41,6 +63,22 @@ export function useDashboardStats() {
       const todayProfit = todaySalesData?.reduce((sum, s) => 
         sum + (s.items?.reduce((p, i: { profit: number }) => p + Number(i.profit), 0) || 0), 0
       ) || 0;
+
+      // Yesterday's sales for comparison
+      let yesterdayQuery = supabase
+        .from('sales')
+        .select('total')
+        .eq('business_id', business.id)
+        .gte('created_at', yesterday.toISOString())
+        .lt('created_at', today.toISOString());
+
+      if (branch?.id) {
+        yesterdayQuery = yesterdayQuery.eq('branch_id', branch.id);
+      }
+
+      const { data: yesterdaySalesData } = await yesterdayQuery;
+      const yesterdaySales = yesterdaySalesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+      const yesterdayOrders = yesterdaySalesData?.length || 0;
 
       // Monthly revenue
       let monthQuery = supabase
@@ -59,6 +97,21 @@ export function useDashboardStats() {
         sum + (s.items?.reduce((p, i: { profit: number }) => p + Number(i.profit), 0) || 0), 0
       ) || 0;
 
+      // Last month's revenue for comparison
+      let lastMonthQuery = supabase
+        .from('sales')
+        .select('total')
+        .eq('business_id', business.id)
+        .gte('created_at', startOfLastMonth.toISOString())
+        .lte('created_at', endOfLastMonth.toISOString());
+
+      if (branch?.id) {
+        lastMonthQuery = lastMonthQuery.eq('branch_id', branch.id);
+      }
+
+      const { data: lastMonthSalesData } = await lastMonthQuery;
+      const lastMonthRevenue = lastMonthSalesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
+
       // Total orders today
       const totalOrders = todaySalesData?.length || 0;
 
@@ -69,13 +122,59 @@ export function useDashboardStats() {
         .eq('business_id', business.id)
         .eq('is_active', true);
 
+      // Best seller today
+      let bestSellerToday: string | null = null;
+      const productQuantities = new Map<string, { name: string; qty: number }>();
+      
+      for (const sale of todaySalesData || []) {
+        for (const item of sale.items || []) {
+          const typedItem = item as { quantity: number; product: { name: string } | null };
+          const productName = typedItem.product?.name;
+          if (productName) {
+            const existing = productQuantities.get(productName);
+            if (existing) {
+              existing.qty += typedItem.quantity;
+            } else {
+              productQuantities.set(productName, { name: productName, qty: typedItem.quantity });
+            }
+          }
+        }
+      }
+      
+      if (productQuantities.size > 0) {
+        const sorted = Array.from(productQuantities.values()).sort((a, b) => b.qty - a.qty);
+        bestSellerToday = sorted[0]?.name || null;
+      }
+
+      // Busiest hour today
+      let busiestHour: number | null = null;
+      if (todaySalesData && todaySalesData.length > 0) {
+        const hourCounts = new Map<number, number>();
+        for (const sale of todaySalesData) {
+          const hour = new Date(sale.created_at).getHours();
+          hourCounts.set(hour, (hourCounts.get(hour) || 0) + 1);
+        }
+        let maxCount = 0;
+        for (const [hour, count] of hourCounts) {
+          if (count > maxCount) {
+            maxCount = count;
+            busiestHour = hour;
+          }
+        }
+      }
+
       return {
         todaySales,
+        yesterdaySales,
         monthlyRevenue,
+        lastMonthRevenue,
         totalOrders,
+        yesterdayOrders,
         totalProducts: totalProducts || 0,
         todayProfit,
-        monthlyProfit
+        monthlyProfit,
+        bestSellerToday,
+        busiestHour
       };
     },
     enabled: !!business?.id
