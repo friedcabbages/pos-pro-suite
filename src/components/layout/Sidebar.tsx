@@ -21,6 +21,7 @@ import {
   Boxes,
   FileText,
   Tag,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -33,7 +34,7 @@ type NavItem = {
 };
 
 const navigation: NavItem[] = [
-  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Dashboard", href: "/app", icon: LayoutDashboard },
   { name: "POS / Cashier", href: "/pos", icon: ShoppingCart },
   { name: "Products", href: "/products", icon: Package },
   { name: "Categories", href: "/categories", icon: Tag, adminOnly: true },
@@ -45,8 +46,10 @@ const navigation: NavItem[] = [
   { name: "Expenses", href: "/expenses", icon: DollarSign, adminOnly: true },
   { name: "Reports", href: "/reports", icon: TrendingUp, adminOnly: true },
   { name: "Audit Logs", href: "/audit-logs", icon: FileText, adminOnly: true },
+  { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
   { name: "Users", href: "/users", icon: Users, ownerOnly: true },
   { name: "Settings", href: "/settings", icon: Settings, ownerOnly: true },
+  { name: "Subscription", href: "/subscription", icon: Crown, ownerOnly: true },
 ];
 
 export function Sidebar() {

@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import type { Json } from '@/integrations/supabase/types';
 import { useBusiness } from '@/contexts/BusinessContext';
 import { toast } from 'sonner';
 
@@ -82,18 +83,16 @@ export function useLogActivity() {
 
       const { error } = await supabase
         .from('business_activity_logs')
-        .insert([
-          {
-            business_id: business.id,
-            user_id: user?.id ?? null,
-            user_email: user?.email ?? null,
-            action,
-            entity_type: entityType,
-            entity_id: entityId ?? null,
-            description: description ?? null,
-            metadata: metadata ?? null,
-          },
-        ]);
+        .insert({
+          business_id: business.id,
+          user_id: user?.id,
+          user_email: user?.email,
+          action,
+          entity_type: entityType,
+          entity_id: entityId,
+          description,
+          metadata: metadata ? (JSON.parse(JSON.stringify(metadata)) as Json) : undefined,
+        });
 
       if (error) throw error;
     },
@@ -161,11 +160,18 @@ export function useExportData() {
       }
       
       // Log the export - use audit_logs table which has the right schema
-      await supabase.from('audit_logs').insert({
-        business_id: business.id,
-        action: 'data_exported',
-        entity_type: type,
-      });
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('audit_logs').insert([
+        {
+          business_id: business.id,
+          action: 'data_exported',
+          entity_type: type,
+          entity_id: null,
+          user_id: user?.id ?? null,
+          old_value: null,
+          new_value: null,
+        },
+      ]);
       
       return { data, filename, type };
     },
