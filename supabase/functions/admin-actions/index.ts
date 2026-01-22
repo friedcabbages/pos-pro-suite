@@ -393,6 +393,270 @@ serve(async (req) => {
         return new Response(JSON.stringify({ logs }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      // --------------------
+      // Backup & Restore
+      // --------------------
+      case "list_snapshots": {
+        if (!isSuperAdmin) {
+          return new Response(JSON.stringify({ error: "Super admin access required" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (!business_id) {
+          return new Response(JSON.stringify({ error: "Missing business_id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: snapshots, error } = await adminClient
+          .from("business_snapshots")
+          .select("id,business_id,name,description,snapshot_data,created_by,created_at")
+          .eq("business_id", business_id)
+          .order("created_at", { ascending: false })
+          .limit(50);
+
+        if (error) {
+          console.error("list_snapshots error:", error.message);
+          return new Response(JSON.stringify({ error: error.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ snapshots: snapshots || [] }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "create_snapshot": {
+        if (!isSuperAdmin) {
+          return new Response(JSON.stringify({ error: "Super admin access required" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (!business_id) {
+          return new Response(JSON.stringify({ error: "Missing business_id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const snapshotName = payload?.name as string | undefined;
+        const snapshotDescription = (payload?.description as string | undefined) ?? null;
+        if (!snapshotName || !snapshotName.trim()) {
+          return new Response(JSON.stringify({ error: "Snapshot name is required" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log("[admin-actions] create_snapshot", { business_id, snapshotName });
+
+        // Fetch the business + core data
+        const { data: business, error: businessError } = await adminClient
+          .from("businesses")
+          .select("*")
+          .eq("id", business_id)
+          .single();
+        if (businessError || !business) {
+          return new Response(JSON.stringify({ error: businessError?.message || "Business not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: branches } = await adminClient.from("branches").select("*").eq("business_id", business_id);
+        const branchIds = (branches || []).map((b: any) => b.id);
+
+        const { data: warehouses } = branchIds.length
+          ? await adminClient.from("warehouses").select("*").in("branch_id", branchIds)
+          : { data: [] };
+
+        const { data: categories } = await adminClient.from("categories").select("*").eq("business_id", business_id);
+        const { data: suppliers } = await adminClient.from("suppliers").select("*").eq("business_id", business_id);
+        const { data: products } = await adminClient.from("products").select("*").eq("business_id", business_id);
+        const { data: expenses } = await adminClient.from("expenses").select("*").eq("business_id", business_id);
+        const { data: purchase_orders } = await adminClient.from("purchase_orders").select("*").eq("business_id", business_id);
+
+        const poIds = (purchase_orders || []).map((po: any) => po.id);
+        const { data: purchase_order_items } = poIds.length
+          ? await adminClient.from("purchase_order_items").select("*").in("purchase_order_id", poIds)
+          : { data: [] };
+
+        const { data: sales } = await adminClient.from("sales").select("*").eq("business_id", business_id);
+        const saleIds = (sales || []).map((s: any) => s.id);
+        const { data: sale_items } = saleIds.length
+          ? await adminClient.from("sale_items").select("*").in("sale_id", saleIds)
+          : { data: [] };
+
+        const warehouseIds = (warehouses || []).map((w: any) => w.id);
+        const { data: inventory } = warehouseIds.length
+          ? await adminClient.from("inventory").select("*").in("warehouse_id", warehouseIds)
+          : { data: [] };
+        const { data: inventory_logs } = warehouseIds.length
+          ? await adminClient.from("inventory_logs").select("*").in("warehouse_id", warehouseIds)
+          : { data: [] };
+
+        const { data: settings } = await adminClient.from("settings").select("*").eq("business_id", business_id).maybeSingle();
+        const { data: user_roles } = await adminClient.from("user_roles").select("*").eq("business_id", business_id);
+
+        const snapshotData = {
+          business,
+          branches: branches || [],
+          warehouses: warehouses || [],
+          categories: categories || [],
+          suppliers: suppliers || [],
+          products: products || [],
+          inventory: inventory || [],
+          inventory_logs: inventory_logs || [],
+          sales: sales || [],
+          sale_items: sale_items || [],
+          expenses: expenses || [],
+          purchase_orders: purchase_orders || [],
+          purchase_order_items: purchase_order_items || [],
+          settings: settings || null,
+          user_roles: user_roles || [],
+        };
+
+        const { data: snapshot, error: snapshotError } = await adminClient
+          .from("business_snapshots")
+          .insert({
+            business_id,
+            name: snapshotName.trim(),
+            description: snapshotDescription,
+            snapshot_data: snapshotData,
+            created_by: userId,
+          })
+          .select()
+          .single();
+
+        if (snapshotError) {
+          console.error("create_snapshot insert error:", snapshotError.message);
+          return new Response(JSON.stringify({ error: snapshotError.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        await logGlobalAudit("snapshot_created", "backup", snapshot.id, business_id, undefined, undefined, {
+          snapshot_id: snapshot.id,
+          name: snapshotName.trim(),
+        });
+
+        return new Response(JSON.stringify({ success: true, snapshot }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      case "restore_snapshot": {
+        if (!isSuperAdmin) {
+          return new Response(JSON.stringify({ error: "Super admin access required" }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        if (!business_id) {
+          return new Response(JSON.stringify({ error: "Missing business_id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const snapshotId = payload?.snapshot_id as string | undefined;
+        if (!snapshotId) {
+          return new Response(JSON.stringify({ error: "Missing snapshot_id" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        console.log("[admin-actions] restore_snapshot", { business_id, snapshotId });
+
+        const { data: snapshot, error: snapError } = await adminClient
+          .from("business_snapshots")
+          .select("*")
+          .eq("id", snapshotId)
+          .eq("business_id", business_id)
+          .single();
+
+        if (snapError || !snapshot) {
+          return new Response(JSON.stringify({ error: snapError?.message || "Snapshot not found" }), {
+            status: 404,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const data = snapshot.snapshot_data as any;
+        if (!data?.business?.id || data.business.id !== business_id) {
+          return new Response(JSON.stringify({ error: "Snapshot data mismatch" }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Delete current business-scoped data (best-effort, ordered)
+        // Note: This is intentionally explicit (no raw SQL) and relies on service role.
+        const saleIds = (data.sales || []).map((s: any) => s.id).filter(Boolean);
+        const poIds = (data.purchase_orders || []).map((po: any) => po.id).filter(Boolean);
+        const branchIds = (data.branches || []).map((b: any) => b.id).filter(Boolean);
+        const warehouseIds = (data.warehouses || []).map((w: any) => w.id).filter(Boolean);
+
+        if (saleIds.length) await adminClient.from("sale_items").delete().in("sale_id", saleIds);
+        await adminClient.from("sales").delete().eq("business_id", business_id);
+        if (warehouseIds.length) await adminClient.from("inventory_logs").delete().in("warehouse_id", warehouseIds);
+        if (warehouseIds.length) await adminClient.from("inventory").delete().in("warehouse_id", warehouseIds);
+        if (poIds.length) await adminClient.from("purchase_order_items").delete().in("purchase_order_id", poIds);
+        await adminClient.from("purchase_orders").delete().eq("business_id", business_id);
+        await adminClient.from("expenses").delete().eq("business_id", business_id);
+        await adminClient.from("products").delete().eq("business_id", business_id);
+        await adminClient.from("categories").delete().eq("business_id", business_id);
+        await adminClient.from("suppliers").delete().eq("business_id", business_id);
+        if (branchIds.length) await adminClient.from("warehouses").delete().in("branch_id", branchIds);
+        await adminClient.from("branches").delete().eq("business_id", business_id);
+        await adminClient.from("settings").delete().eq("business_id", business_id);
+        await adminClient.from("user_roles").delete().eq("business_id", business_id);
+
+        // Restore business row (non-destructive: keep id)
+        const businessUpdate: any = { ...data.business };
+        delete businessUpdate.created_at;
+        delete businessUpdate.updated_at;
+        await adminClient.from("businesses").update(businessUpdate).eq("id", business_id);
+
+        // Restore core tables (insert with original ids)
+        if (data.branches?.length) await adminClient.from("branches").insert(data.branches);
+        if (data.warehouses?.length) await adminClient.from("warehouses").insert(data.warehouses);
+        if (data.categories?.length) await adminClient.from("categories").insert(data.categories);
+        if (data.suppliers?.length) await adminClient.from("suppliers").insert(data.suppliers);
+        if (data.products?.length) await adminClient.from("products").insert(data.products);
+        if (data.settings) await adminClient.from("settings").insert(data.settings);
+        if (data.user_roles?.length) await adminClient.from("user_roles").insert(data.user_roles);
+        if (data.purchase_orders?.length) await adminClient.from("purchase_orders").insert(data.purchase_orders);
+        if (data.purchase_order_items?.length) await adminClient.from("purchase_order_items").insert(data.purchase_order_items);
+        if (data.inventory?.length) await adminClient.from("inventory").insert(data.inventory);
+        if (data.inventory_logs?.length) await adminClient.from("inventory_logs").insert(data.inventory_logs);
+        if (data.sales?.length) await adminClient.from("sales").insert(data.sales);
+        if (data.sale_items?.length) await adminClient.from("sale_items").insert(data.sale_items);
+        if (data.expenses?.length) await adminClient.from("expenses").insert(data.expenses);
+
+        await logGlobalAudit("snapshot_restored", "backup", snapshotId, business_id, undefined, undefined, {
+          snapshot_id: snapshotId,
+          restored_at: new Date().toISOString(),
+        });
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       default:
         return new Response(JSON.stringify({ error: "Unknown action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
