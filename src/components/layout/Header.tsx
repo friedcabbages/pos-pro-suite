@@ -1,8 +1,18 @@
-import { Bell, Search, HelpCircle } from "lucide-react";
+import { Bell, Search, HelpCircle, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { usePlanAccess } from "@/hooks/usePlanAccess";
+import { useNavigate } from "react-router-dom";
 
 export function Header() {
+  const plan = usePlanAccess();
+  const navigate = useNavigate();
+
+  const planSuffix =
+    plan.businessStatus === "trial" && typeof plan.trialDaysRemaining === "number"
+      ? ` (${plan.trialDaysRemaining} days left)`
+      : "";
+
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-card px-6">
       {/* Search */}
@@ -17,6 +27,16 @@ export function Header() {
 
       {/* Actions */}
       <div className="flex items-center gap-1">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => navigate("/subscription")}
+          className="mr-2 hidden sm:inline-flex"
+        >
+          <Crown className="mr-2 h-4 w-4" />
+          Plan: {plan.displayName}
+          {planSuffix}
+        </Button>
         <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground">
           <HelpCircle className="h-4 w-4" />
         </Button>

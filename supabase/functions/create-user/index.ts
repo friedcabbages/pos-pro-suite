@@ -155,6 +155,57 @@ serve(async (req) => {
       });
     }
 
+    // Enforce plan max_users (service role bypasses RLS, so enforce here)
+    const { data: maxUsers, error: maxUsersErr } = await adminClient.rpc("plan_limit_users", {
+      p_business_id: business_id,
+    });
+    if (maxUsersErr) {
+      console.error("plan_limit_users error:", maxUsersErr.message);
+      return new Response(JSON.stringify({ error: "Failed to check subscription limits" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const { data: userCount, error: userCountErr } = await adminClient.rpc("count_business_users", {
+      p_business_id: business_id,
+    });
+    if (userCountErr) {
+      console.error("count_business_users error:", userCountErr.message);
+      return new Response(JSON.stringify({ error: "Failed to check subscription limits" }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const maxUsersNum = maxUsers as number | null;
+    const currentUsersNum = Number(userCount ?? 0);
+
+    if (maxUsersNum !== null && currentUsersNum >= maxUsersNum) {
+      console.warn("User limit reached", { business_id, currentUsersNum, maxUsersNum });
+
+      // Best-effort log
+      await adminClient.from("business_activity_logs").insert({
+        business_id,
+        user_id: currentUserId,
+        action: "limit_blocked_users",
+        entity_type: "subscription",
+        entity_id: business_id,
+        description: `User limit reached (${currentUsersNum}/${maxUsersNum})`,
+        metadata: { current: currentUsersNum, max: maxUsersNum },
+      });
+
+      return new Response(
+        JSON.stringify({
+          error: "User limit reached for your current plan",
+          code: "LIMIT_MAX_USERS",
+          current: currentUsersNum,
+          max: maxUsersNum,
+        }),
+        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     console.log("Permission check passed, creating auth user...");
 
     // Create the user using admin API (service role)

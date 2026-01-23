@@ -45,6 +45,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useUsers, useCreateUser, useDeleteUser, useUpdateUserRole } from "@/hooks/useUsers";
 import { useBusiness } from "@/contexts/BusinessContext";
+import { usePlanAccess } from "@/hooks/usePlanAccess";
+import { useUpgradeModal } from "@/contexts/UpgradeModalContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 
@@ -78,6 +80,12 @@ export default function Users() {
   const createUser = useCreateUser();
   const deleteUser = useDeleteUser();
   const updateUserRole = useUpdateUserRole();
+  const plan = usePlanAccess();
+  const upgrade = useUpgradeModal();
+
+  const currentUsersCount = users?.length || 0;
+  const maxUsers = plan.limits.maxUsers;
+  const isAtUserLimit = maxUsers !== null && currentUsersCount >= maxUsers;
 
   // Counters are calculated from the full users list (before search filter)
   const ownerCount = users?.filter((u) => u.role === "owner").length || 0;
@@ -92,6 +100,16 @@ export default function Users() {
   }) || [];
 
   const handleCreate = () => {
+    if (isAtUserLimit) {
+      upgrade.open({
+        reason: "limit",
+        requiredPlan: plan.planName === "basic" ? "pro" : "enterprise",
+        message: "You’ve reached your user limit. Upgrade now to add more users and keep your team running smoothly.",
+        highlights: ["More users", "Better controls", "Advanced reporting"],
+      });
+      return;
+    }
+
     if (!formData.email.trim() || !formData.password.trim() || !formData.full_name.trim()) {
       toast.error("Please fill in all required fields");
       return;
@@ -122,6 +140,18 @@ export default function Users() {
             role: "cashier",
             branch_id: "",
           });
+        },
+        onError: (err: any) => {
+          const msg = String(err?.message || "");
+          if (msg.includes("LIMIT_MAX_USERS") || msg.toLowerCase().includes("user limit")) {
+            upgrade.open({
+              reason: "limit",
+              requiredPlan: plan.planName === "basic" ? "pro" : "enterprise",
+              message:
+                "Your plan allows a limited number of users. Upgrade now to add more users and unlock more features.",
+              highlights: ["More users", "Expenses", "Purchase Orders"],
+            });
+          }
         },
       }
     );
@@ -158,12 +188,31 @@ export default function Users() {
           </div>
           {isOwner && (
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
+              <div>
+                <Button
+                  onClick={() => {
+                    if (isAtUserLimit) {
+                      upgrade.open({
+                        reason: "limit",
+                        requiredPlan: plan.planName === "basic" ? "pro" : "enterprise",
+                        message:
+                          "You’ve reached your user limit. Upgrade now to add more users and unlock more features.",
+                        highlights: ["More users", "Expenses", "Purchase Orders"],
+                      });
+                      return;
+                    }
+                    setIsDialogOpen(true);
+                  }}
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Add User
                 </Button>
-              </DialogTrigger>
+                {maxUsers !== null && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {currentUsersCount}/{maxUsers} users
+                  </p>
+                )}
+              </div>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Add New User</DialogTitle>
