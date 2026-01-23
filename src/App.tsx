@@ -6,7 +6,9 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./contexts/AuthContext";
 import { BusinessProvider } from "./contexts/BusinessContext";
 import { ImpersonationProvider } from "./contexts/ImpersonationContext";
+import { UpgradeModalProvider } from "@/contexts/UpgradeModalContext";
 import { ProtectedRoute, AdminRoute, OwnerRoute } from "./components/ProtectedRoute";
+import { FeatureRoute } from "@/components/FeatureRoute";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -23,6 +25,7 @@ import Expenses from "./pages/Expenses";
 import Users from "./pages/Users";
 import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
+import ReportsAdvanced from "./pages/ReportsAdvanced";
 import AuditLogs from "./pages/AuditLogs";
 import Onboarding from "./pages/Onboarding";
 import Subscription from "./pages/Subscription";
@@ -60,6 +63,7 @@ const App = () => (
         <AuthProvider>
           <ImpersonationProvider>
             <BusinessProvider>
+              <UpgradeModalProvider>
               <ImpersonationBanner />
               <Routes>
                 {/* Testing Hub - Development Entry Point */}
@@ -99,11 +103,73 @@ const App = () => (
                 <Route path="/inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
                 <Route path="/warehouses" element={<AdminRoute><Warehouses /></AdminRoute>} />
                 <Route path="/transactions" element={<AdminRoute><Transactions /></AdminRoute>} />
-                <Route path="/expenses" element={<AdminRoute><Expenses /></AdminRoute>} />
+                {/* /expenses is feature-gated below */}
                 <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
+                <Route
+                  path="/reports-advanced"
+                  element={
+                    <AdminRoute>
+                      <FeatureRoute
+                        featureKey="reports_advanced"
+                        requiredPlan="pro"
+                        title="Advanced Reports"
+                        description="Advanced analytics are available on Pro and Enterprise."
+                        upsell="This feature is available on the Pro Plan. Upgrade now to unlock Advanced Reports and more."
+                      >
+                        <ReportsAdvanced />
+                      </FeatureRoute>
+                    </AdminRoute>
+                  }
+                />
                 <Route path="/suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
-                <Route path="/purchase-orders" element={<AdminRoute><PurchaseOrders /></AdminRoute>} />
-                <Route path="/audit-logs" element={<AdminRoute><AuditLogs /></AdminRoute>} />
+                <Route
+                  path="/purchase-orders"
+                  element={
+                    <AdminRoute>
+                      <FeatureRoute
+                        featureKey="purchase_orders"
+                        requiredPlan="pro"
+                        title="Purchase Orders"
+                        description="Purchase Orders are available on Pro and Enterprise."
+                        upsell="This feature is available on the Pro Plan. Upgrade now to unlock Expenses, Purchase Orders, and more."
+                      >
+                        <PurchaseOrders />
+                      </FeatureRoute>
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/expenses"
+                  element={
+                    <AdminRoute>
+                      <FeatureRoute
+                        featureKey="expenses"
+                        requiredPlan="pro"
+                        title="Expenses"
+                        description="Expense tracking is available on Pro and Enterprise."
+                        upsell="This feature is available on the Pro Plan. Upgrade now to unlock Expenses, Purchase Orders, and more."
+                      >
+                        <Expenses />
+                      </FeatureRoute>
+                    </AdminRoute>
+                  }
+                />
+                <Route
+                  path="/audit-logs"
+                  element={
+                    <AdminRoute>
+                      <FeatureRoute
+                        featureKey="audit_logs_full"
+                        requiredPlan="enterprise"
+                        title="Audit Logs"
+                        description="Full audit logs and compliance mode are available on Enterprise."
+                        upsell="This feature is available on the Enterprise Plan. Upgrade now for full audit logs, compliance mode, and priority support."
+                      >
+                        <AuditLogs />
+                      </FeatureRoute>
+                    </AdminRoute>
+                  }
+                />
                 <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
                 <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
                 <Route path="/subscription" element={<OwnerRoute><Subscription /></OwnerRoute>} />
@@ -112,6 +178,7 @@ const App = () => (
                 {/* 404 - Catch all */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </UpgradeModalProvider>
             </BusinessProvider>
           </ImpersonationProvider>
         </AuthProvider>

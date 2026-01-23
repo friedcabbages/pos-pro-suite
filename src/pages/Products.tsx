@@ -45,6 +45,8 @@ import {
 import { useProducts, useCreateProduct, useDeleteProduct, useUpdateProduct } from "@/hooks/useProducts";
 import { useCategories } from "@/hooks/useCategories";
 import { useBusiness } from "@/contexts/BusinessContext";
+import { usePlanAccess } from "@/hooks/usePlanAccess";
+import { useUpgradeModal } from "@/contexts/UpgradeModalContext";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 
@@ -96,6 +98,12 @@ export default function Products() {
   const updateProduct = useUpdateProduct();
   const deleteProduct = useDeleteProduct();
   const { toast } = useToast();
+  const plan = usePlanAccess();
+  const upgrade = useUpgradeModal();
+
+  const currentProductsCount = products?.length || 0;
+  const maxProducts = plan.limits.maxProducts;
+  const isAtProductLimit = maxProducts !== null && currentProductsCount >= maxProducts;
 
   const filteredProducts = products?.filter((product) => {
     const matchesSearch =
@@ -125,6 +133,17 @@ export default function Products() {
   };
 
   const handleCreate = async () => {
+    if (isAtProductLimit) {
+      upgrade.open({
+        reason: "limit",
+        requiredPlan: plan.planName === "basic" ? "pro" : "enterprise",
+        message:
+          "You’ve reached your product limit. Upgrade now to add more products and unlock more features.",
+        highlights: ["Up to 1,000 products", "Expenses", "Purchase Orders", "Advanced reports"],
+      });
+      return;
+    }
+
     if (!formData.name.trim()) {
       toast({ title: "Name required", variant: "destructive" });
       return;
@@ -145,6 +164,16 @@ export default function Products() {
         toast({ title: "Product created successfully" });
       },
       onError: (error: any) => {
+        const msg = String(error?.message || "");
+        if (isAtProductLimit || msg.toLowerCase().includes("row-level security")) {
+          upgrade.open({
+            reason: "limit",
+            requiredPlan: plan.planName === "basic" ? "pro" : "enterprise",
+            message:
+              "Your plan allows a limited number of products. Upgrade now to add more products and unlock more features.",
+            highlights: ["More products", "Advanced reports", "Multi-warehouse"],
+          });
+        }
         toast({ title: "Failed to create product", description: error.message, variant: "destructive" });
       },
     });
@@ -268,12 +297,32 @@ export default function Products() {
             </p>
           </div>
           <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button variant="glow">
+            <div>
+              <Button
+                variant="glow"
+                onClick={() => {
+                  if (isAtProductLimit) {
+                    upgrade.open({
+                      reason: "limit",
+                      requiredPlan: plan.planName === "basic" ? "pro" : "enterprise",
+                      message:
+                        "You’ve reached your product limit. Upgrade now to add more products and unlock more features.",
+                      highlights: ["Up to 1,000 products", "Expenses", "Purchase Orders"],
+                    });
+                    return;
+                  }
+                  setIsCreateOpen(true);
+                }}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Add Product
               </Button>
-            </DialogTrigger>
+              {maxProducts !== null && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {currentProductsCount}/{maxProducts} products
+                </p>
+              )}
+            </div>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Add New Product</DialogTitle>
@@ -482,13 +531,24 @@ export default function Products() {
                                 <Edit className="mr-2 h-4 w-4" />
                                 Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                className="text-destructive"
-                                onClick={() => handleDelete(product.id)}
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
-                              </DropdownMenuItem>
+                              {!plan.isComplianceMode ? (
+                                <DropdownMenuItem
+                                  className="text-destructive"
+                                  onClick={() => handleDelete(product.id)}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem
+                                  disabled
+                                  className="text-muted-foreground"
+                                  onSelect={(e) => e.preventDefault()}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete (Compliance Mode)
+                                </DropdownMenuItem>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </TableCell>

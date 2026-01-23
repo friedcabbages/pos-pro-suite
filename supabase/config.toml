@@ -16,3 +16,6 @@ verify_jwt = false
 [functions.admin-actions]
 verify_jwt = false
 
+[functions.device-session]
+verify_jwt = false
+
