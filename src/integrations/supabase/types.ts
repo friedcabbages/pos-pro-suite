@@ -191,6 +191,36 @@ export type Database = {
           },
         ]
       }
+      business_device_sessions: {
+        Row: {
+          business_id: string
+          created_at: string
+          device_id: string
+          id: string
+          last_seen: string
+          revoked_at: string | null
+          user_id: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          device_id: string
+          id?: string
+          last_seen?: string
+          revoked_at?: string | null
+          user_id: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          device_id?: string
+          id?: string
+          last_seen?: string
+          revoked_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       business_snapshots: {
         Row: {
           business_id: string
@@ -1363,6 +1393,7 @@ export type Database = {
           id: string
           is_active: boolean
           max_branches: number | null
+          max_devices: number | null
           max_products: number | null
           max_users: number | null
           name: string
@@ -1378,6 +1409,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           max_branches?: number | null
+          max_devices?: number | null
           max_products?: number | null
           max_users?: number | null
           name: string
@@ -1393,6 +1425,7 @@ export type Database = {
           id?: string
           is_active?: boolean
           max_branches?: number | null
+          max_devices?: number | null
           max_products?: number | null
           max_users?: number | null
           name?: string
@@ -1709,6 +1742,48 @@ export type Database = {
         Args: { p_business_id: string; p_role: string; p_user_id: string }
         Returns: undefined
       }
+      count_active_devices: {
+        Args: { p_business_id: string; p_window_minutes?: number }
+        Returns: number
+      }
+      count_business_branches: {
+        Args: { p_business_id: string }
+        Returns: number
+      }
+      count_business_products: {
+        Args: { p_business_id: string }
+        Returns: number
+      }
+      count_business_users: { Args: { p_business_id: string }; Returns: number }
+      count_business_warehouses: {
+        Args: { p_business_id: string }
+        Returns: number
+      }
+      get_business_plan_row: {
+        Args: { p_business_id: string }
+        Returns: {
+          created_at: string
+          display_name: string
+          features: Json
+          id: string
+          is_active: boolean
+          max_branches: number | null
+          max_devices: number | null
+          max_products: number | null
+          max_users: number | null
+          name: string
+          price_monthly: number
+          price_yearly: number
+          sort_order: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "subscription_plans"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       get_user_business_id: { Args: never; Returns: string }
       has_branch_access: {
         Args: { _branch_id: string; _user_id: string }
@@ -1716,6 +1791,10 @@ export type Database = {
       }
       has_business_access: {
         Args: { _business_id: string; _user_id: string }
+        Returns: boolean
+      }
+      has_plan_feature: {
+        Args: { p_business_id: string; p_feature_key: string }
         Returns: boolean
       }
       has_role: {
@@ -1734,6 +1813,11 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      plan_features: { Args: { p_business_id: string }; Returns: Json }
+      plan_limit_branches: { Args: { p_business_id: string }; Returns: number }
+      plan_limit_devices: { Args: { p_business_id: string }; Returns: number }
+      plan_limit_products: { Args: { p_business_id: string }; Returns: number }
+      plan_limit_users: { Args: { p_business_id: string }; Returns: number }
     }
     Enums: {
       app_role: "owner" | "admin" | "cashier"
