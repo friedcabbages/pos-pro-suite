@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -24,12 +25,15 @@ import { useBusiness } from "@/contexts/BusinessContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useConnectivityMode } from "@/hooks/useConnectivityMode";
+import type { ConnectivityMode } from "@/data/connectivityMode";
 
 export default function Settings() {
   const { business, refetchBusiness } = useBusiness();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(true);
+  const { mode: connectivityMode, setMode: setConnectivityMode } = useConnectivityMode();
   
   const [businessData, setBusinessData] = useState({
     name: "",
@@ -161,68 +165,103 @@ export default function Settings() {
 
           {/* Business Settings */}
           <TabsContent value="business">
-            <div className="rounded-xl border border-border bg-card p-6 shadow-card">
-              <h3 className="mb-6 text-lg font-semibold text-foreground">
-                Business Profile
-              </h3>
-              <div className="grid gap-6 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="businessName">Business Name</Label>
-                  <Input 
-                    id="businessName" 
-                    value={businessData.name}
-                    onChange={(e) => setBusinessData({ ...businessData, name: e.target.value })}
-                  />
+            <div className="space-y-6">
+              <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+                <h3 className="mb-6 text-lg font-semibold text-foreground">
+                  Business Profile
+                </h3>
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="businessName">Business Name</Label>
+                    <Input
+                      id="businessName"
+                      value={businessData.name}
+                      onChange={(e) => setBusinessData({ ...businessData, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="currency">Currency</Label>
+                    <Select
+                      value={businessData.currency}
+                      onValueChange={(v) => setBusinessData({ ...businessData, currency: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USD">USD - US Dollar</SelectItem>
+                        <SelectItem value="IDR">IDR - Indonesian Rupiah</SelectItem>
+                        <SelectItem value="EUR">EUR - Euro</SelectItem>
+                        <SelectItem value="GBP">GBP - British Pound</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={businessData.email}
+                      onChange={(e) => setBusinessData({ ...businessData, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone</Label>
+                    <Input
+                      id="phone"
+                      value={businessData.phone}
+                      onChange={(e) => setBusinessData({ ...businessData, phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="address">Address</Label>
+                    <Input
+                      id="address"
+                      value={businessData.address}
+                      onChange={(e) => setBusinessData({ ...businessData, address: e.target.value })}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select 
-                    value={businessData.currency} 
-                    onValueChange={(v) => setBusinessData({ ...businessData, currency: v })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="USD">USD - US Dollar</SelectItem>
-                      <SelectItem value="IDR">IDR - Indonesian Rupiah</SelectItem>
-                      <SelectItem value="EUR">EUR - Euro</SelectItem>
-                      <SelectItem value="GBP">GBP - British Pound</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input 
-                    id="email" 
-                    type="email" 
-                    value={businessData.email}
-                    onChange={(e) => setBusinessData({ ...businessData, email: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone</Label>
-                  <Input 
-                    id="phone" 
-                    value={businessData.phone}
-                    onChange={(e) => setBusinessData({ ...businessData, phone: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="address">Address</Label>
-                  <Input 
-                    id="address" 
-                    value={businessData.address}
-                    onChange={(e) => setBusinessData({ ...businessData, address: e.target.value })}
-                  />
+                <div className="mt-6 flex justify-end">
+                  <Button variant="glow" onClick={handleSaveBusiness} disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    <Save className="mr-2 h-4 w-4" />
+                    Save Changes
+                  </Button>
                 </div>
               </div>
-              <div className="mt-6 flex justify-end">
-                <Button variant="glow" onClick={handleSaveBusiness} disabled={loading}>
-                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  <Save className="mr-2 h-4 w-4" />
-                  Save Changes
-                </Button>
+
+              <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+                <h3 className="text-lg font-semibold text-foreground">
+                  Connectivity Mode
+                </h3>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Choose whether the app should sync with the cloud or stay local only.
+                </p>
+                <RadioGroup
+                  value={connectivityMode}
+                  onValueChange={(value) => setConnectivityMode(value as ConnectivityMode)}
+                  className="mt-4 grid gap-3"
+                >
+                  <label className="flex items-start gap-3 rounded-lg border border-border p-4">
+                    <RadioGroupItem value="online" />
+                    <div>
+                      <p className="font-medium text-foreground">Online (Auto Sync)</p>
+                      <p className="text-sm text-muted-foreground">
+                        Sync to Supabase when network is available.
+                      </p>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-lg border border-border p-4">
+                    <RadioGroupItem value="offline" />
+                    <div>
+                      <p className="font-medium text-foreground">Offline (Local Only)</p>
+                      <p className="text-sm text-muted-foreground">
+                        Keep all reads and writes in local IndexedDB.
+                      </p>
+                    </div>
+                  </label>
+                </RadioGroup>
               </div>
             </div>
           </TabsContent>

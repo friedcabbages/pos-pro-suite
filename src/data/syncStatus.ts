@@ -1,6 +1,9 @@
+import { getConnectivityMode } from "@/data/connectivityMode";
+
 export type ConnectivityUiStatus =
   | "online_synced"
   | "offline"
+  | "offline_forced"
   | "syncing"
   | "sync_failed";
 
@@ -14,9 +17,13 @@ export type ConnectivityState = {
 
 type Listener = (state: ConnectivityState) => void;
 
+const initialMode = getConnectivityMode();
+const initialOnline = typeof navigator !== "undefined" ? navigator.onLine : true;
+const forcedOffline = initialMode === "offline";
+
 const DEFAULT_STATE: ConnectivityState = {
-  online: typeof navigator !== "undefined" ? navigator.onLine : true,
-  status: typeof navigator !== "undefined" && !navigator.onLine ? "offline" : "online_synced",
+  online: forcedOffline ? false : initialOnline,
+  status: forcedOffline ? "offline_forced" : initialOnline ? "online_synced" : "offline",
   queueCount: 0,
   lastSyncAt: null,
   lastError: null,

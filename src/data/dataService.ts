@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Category, Product, Sale, SaleItem } from "@/types/database";
 import { connectivityStore } from "@/data/syncStatus";
+import { connectivityModeStore, isManualOffline } from "@/data/connectivityMode";
 import {
   localDb,
   makeInvoiceNumber,
@@ -29,8 +30,21 @@ let ctx: Ctx = {
 let started = false;
 let syncing = false;
 let unsubOnline: (() => void) | null = null;
+let unsubMode: (() => void) | null = null;
+
+function setForcedOfflineState() {
+  connectivityStore.setState({
+    online: false,
+    status: "offline_forced",
+  });
+}
 
 function setOnlineState(online: boolean) {
+  if (isManualOffline()) {
+    setForcedOfflineState();
+    return;
+  }
+
   connectivityStore.setState({
     online,
     status: online ? "online_synced" : "offline",
@@ -49,10 +63,18 @@ function ensureStarted() {
   started = true;
 
   const onOnline = () => {
+    if (isManualOffline()) {
+      setForcedOfflineState();
+      return;
+    }
     setOnlineState(true);
     void syncNow();
   };
   const onOffline = () => {
+    if (isManualOffline()) {
+      setForcedOfflineState();
+      return;
+    }
     setOnlineState(false);
   };
 
@@ -64,7 +86,20 @@ function ensureStarted() {
     window.removeEventListener("offline", onOffline);
   };
 
-  setOnlineState(navigator.onLine);
+  unsubMode = connectivityModeStore.subscribe((mode) => {
+    if (mode === "offline") {
+      setForcedOfflineState();
+      return;
+    }
+    setOnlineState(navigator.onLine);
+    if (navigator.onLine) void syncNow();
+  });
+
+  if (isManualOffline()) {
+    setForcedOfflineState();
+  } else {
+    setOnlineState(navigator.onLine);
+  }
 }
 
 async function upsertCategoriesFromServer(categories: Category[]) {
@@ -306,6 +341,7 @@ async function pushQueuedOrderToSupabase(item: Extract<SyncQueueItem, { type: "c
 }
 
 async function processQueue() {
+  if (isManualOffline()) return;
   const online = navigator.onLine;
   if (!online) return;
   if (!ctx.businessId) return;
@@ -374,6 +410,11 @@ async function processQueue() {
 export async function syncNow() {
   ensureStarted();
   if (syncing) return;
+  if (isManualOffline()) {
+    setForcedOfflineState();
+    await refreshQueueCount();
+    return;
+  }
   if (!navigator.onLine) {
     connectivityStore.setState({ online: false, status: "offline" });
     await refreshQueueCount();
@@ -417,7 +458,7 @@ export async function startDataLayer(next: Ctx) {
   await refreshQueueCount();
 
   // Don't block UI: kick sync asynchronously on start / context change.
-  if (changed && navigator.onLine) {
+  if (changed && navigator.onLine && !isManualOffline()) {
     void syncNow();
   }
 }
@@ -426,6 +467,8 @@ export function stopDataLayer() {
   ctx = { businessId: null, branchId: null, warehouseId: null, userId: null };
   if (unsubOnline) unsubOnline();
   unsubOnline = null;
+  if (unsubMode) unsubMode();
+  unsubMode = null;
   started = false;
 }
 
@@ -516,6 +559,7 @@ export async function createOrder(input: {
   const id = crypto.randomUUID();
   const invoice_number = makeInvoiceNumber();
 
+  const allowRemote = navigator.onLine && !isManualOffline();
   const order: LocalOrder = {
     id,
     business_id: ctx.businessId,
@@ -535,8 +579,8 @@ export async function createOrder(input: {
     created_at: ts,
     local_created_at: ts,
     local_updated_at: ts,
-    sync_status: navigator.onLine ? "synced" : "pending",
-    synced_at: navigator.onLine ? ts : null,
+    sync_status: allowRemote ? "synced" : "pending",
+    synced_at: allowRemote ? ts : null,
   };
 
   const items: LocalOrderItem[] = input.items.map((it) => {
@@ -597,7 +641,7 @@ export async function createOrder(input: {
   });
 
   // Online path: write-through to Supabase (but never block local commit)
-  if (navigator.onLine) {
+  if (allowRemote) {
     try {
       await pushQueuedOrderToSupabase({
         created_at: ts,
@@ -645,7 +689,7 @@ export async function createOrder(input: {
     payload: { order, items, stock_deltas: stockDeltas },
   });
   await refreshQueueCount();
-  connectivityStore.setState({ status: "offline" });
+  connectivityStore.setState({ status: isManualOffline() ? "offline_forced" : "offline" });
   return order as unknown as Sale;
 }
 
@@ -681,7 +725,8 @@ export async function upsertProduct(product: Partial<Product> & { id?: string })
 
   await localDb.products.put(row);
 
-  if (navigator.onLine) {
+  const allowRemote = navigator.onLine && !isManualOffline();
+  if (allowRemote) {
     try {
       const { error } = await supabase.from("products").upsert({
         ...row,
@@ -740,7 +785,8 @@ export async function upsertCategory(category: Partial<Category> & { id?: string
 
   await localDb.categories.put(row);
 
-  if (navigator.onLine) {
+  const allowRemote = navigator.onLine && !isManualOffline();
+  if (allowRemote) {
     try {
       const { error } = await supabase.from("categories").upsert({
         ...row,

@@ -36,7 +36,7 @@ export function Header() {
         >
           {connectivity.status === "syncing" ? (
             <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-          ) : connectivity.status === "offline" ? (
+          ) : connectivity.status === "offline" || connectivity.status === "offline_forced" ? (
             <WifiOff className="h-3.5 w-3.5" />
           ) : connectivity.status === "sync_failed" ? (
             <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
@@ -46,11 +46,13 @@ export function Header() {
 
           {connectivity.status === "syncing"
             ? "Syncing…"
-            : connectivity.status === "offline"
-              ? "Offline – Working locally"
-              : connectivity.status === "sync_failed"
-                ? "Sync failed"
-                : "Online – All data synced"}
+            : connectivity.status === "offline_forced"
+              ? "Offline Mode – Using local data"
+              : connectivity.status === "offline"
+                ? "Offline – Working locally"
+                : connectivity.status === "sync_failed"
+                  ? "Sync failed"
+                  : "Online – All data synced"}
         </Badge>
         <Button
           variant="outline"

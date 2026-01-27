@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { startDataLayer, syncNow } from "@/data/dataService";
+import { isManualOffline } from "@/data/connectivityMode";
 
 export function DataLayerProvider({ children }: { children: React.ReactNode }) {
   const { user, initialized: authInitialized } = useAuth();
@@ -24,7 +25,7 @@ export function DataLayerProvider({ children }: { children: React.ReactNode }) {
     if (!business?.id) return;
 
     const id = window.setInterval(() => {
-      if (navigator.onLine) void syncNow();
+      if (navigator.onLine && !isManualOffline()) void syncNow();
     }, 60_000);
 
     return () => window.clearInterval(id);
