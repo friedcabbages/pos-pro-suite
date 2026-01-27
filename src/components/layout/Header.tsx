@@ -1,12 +1,15 @@
-import { Bell, Search, HelpCircle, Crown } from "lucide-react";
+import { Bell, Search, HelpCircle, Crown, Wifi, WifiOff, RefreshCw, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { usePlanAccess } from "@/hooks/usePlanAccess";
 import { useNavigate } from "react-router-dom";
+import { useConnectivityStatus } from "@/hooks/useConnectivityStatus";
 
 export function Header() {
   const plan = usePlanAccess();
   const navigate = useNavigate();
+  const connectivity = useConnectivityStatus();
 
   const planSuffix =
     plan.businessStatus === "trial" && typeof plan.trialDaysRemaining === "number"
@@ -27,6 +30,28 @@ export function Header() {
 
       {/* Actions */}
       <div className="flex items-center gap-1">
+        <Badge
+          variant="outline"
+          className="mr-2 hidden sm:inline-flex items-center gap-2 text-xs text-muted-foreground"
+        >
+          {connectivity.status === "syncing" ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          ) : connectivity.status === "offline" ? (
+            <WifiOff className="h-3.5 w-3.5" />
+          ) : connectivity.status === "sync_failed" ? (
+            <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+          ) : (
+            <Wifi className="h-3.5 w-3.5" />
+          )}
+
+          {connectivity.status === "syncing"
+            ? "Syncing…"
+            : connectivity.status === "offline"
+              ? "Offline – Working locally"
+              : connectivity.status === "sync_failed"
+                ? "Sync failed"
+                : "Online – All data synced"}
+        </Badge>
         <Button
           variant="outline"
           size="sm"

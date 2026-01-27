@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useBusiness } from '@/contexts/BusinessContext';
+import { listOrders, listProducts } from '@/data/dataService';
+import { useConnectivityStatus } from '@/hooks/useConnectivityStatus';
 
 export interface DashboardStats {
   todaySales: number;
@@ -18,6 +19,7 @@ export interface DashboardStats {
 
 export function useDashboardStats() {
   const { business, branch } = useBusiness();
+  const connectivity = useConnectivityStatus();
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   
@@ -29,7 +31,7 @@ export function useDashboardStats() {
   const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
 
   return useQuery({
-    queryKey: ['dashboard-stats', business?.id, branch?.id],
+    queryKey: ['dashboard-stats', business?.id, branch?.id, connectivity.lastSyncAt, connectivity.queueCount, connectivity.status],
     queryFn: async (): Promise<DashboardStats> => {
       if (!business?.id) {
         return {
@@ -47,97 +49,68 @@ export function useDashboardStats() {
         };
       }
 
-      // Today's sales
-      let todayQuery = supabase
-        .from('sales')
-        .select('total, created_at, items:sale_items(profit, quantity, product:products(name))')
-        .eq('business_id', business.id)
-        .gte('created_at', today.toISOString());
+      const todayOrders = await listOrders({
+        businessId: business.id,
+        branchId: branch?.id,
+        limit: 5000,
+        start: today,
+      });
+      const todaySales = todayOrders.reduce((sum, s) => sum + Number(s.total), 0);
+      const todayProfit = todayOrders.reduce(
+        (sum, s) => sum + (s.items?.reduce((p, i) => p + Number((i as unknown as { profit: number }).profit || 0), 0) || 0),
+        0
+      );
 
-      if (branch?.id) {
-        todayQuery = todayQuery.eq('branch_id', branch.id);
-      }
+      const yesterdayOrdersRows = await listOrders({
+        businessId: business.id,
+        branchId: branch?.id,
+        limit: 5000,
+        start: yesterday,
+        end: today,
+      });
+      const yesterdaySales = yesterdayOrdersRows.reduce((sum, s) => sum + Number(s.total), 0);
+      const yesterdayOrders = yesterdayOrdersRows.length;
 
-      const { data: todaySalesData } = await todayQuery;
-      const todaySales = todaySalesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
-      const todayProfit = todaySalesData?.reduce((sum, s) => 
-        sum + (s.items?.reduce((p, i: { profit: number }) => p + Number(i.profit), 0) || 0), 0
-      ) || 0;
+      const monthOrders = await listOrders({
+        businessId: business.id,
+        branchId: branch?.id,
+        limit: 10000,
+        start: startOfMonth,
+      });
+      const monthlyRevenue = monthOrders.reduce((sum, s) => sum + Number(s.total), 0);
+      const monthlyProfit = monthOrders.reduce(
+        (sum, s) => sum + (s.items?.reduce((p, i) => p + Number((i as unknown as { profit: number }).profit || 0), 0) || 0),
+        0
+      );
 
-      // Yesterday's sales for comparison
-      let yesterdayQuery = supabase
-        .from('sales')
-        .select('total')
-        .eq('business_id', business.id)
-        .gte('created_at', yesterday.toISOString())
-        .lt('created_at', today.toISOString());
+      const lastMonthOrders = await listOrders({
+        businessId: business.id,
+        branchId: branch?.id,
+        limit: 20000,
+        start: startOfLastMonth,
+        end: endOfLastMonth,
+      });
+      const lastMonthRevenue = lastMonthOrders.reduce((sum, s) => sum + Number(s.total), 0);
 
-      if (branch?.id) {
-        yesterdayQuery = yesterdayQuery.eq('branch_id', branch.id);
-      }
+      const totalOrders = todayOrders.length;
 
-      const { data: yesterdaySalesData } = await yesterdayQuery;
-      const yesterdaySales = yesterdaySalesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
-      const yesterdayOrders = yesterdaySalesData?.length || 0;
+      const products = await listProducts(business.id, null);
+      const totalProducts = products.length;
 
-      // Monthly revenue
-      let monthQuery = supabase
-        .from('sales')
-        .select('total, items:sale_items(profit)')
-        .eq('business_id', business.id)
-        .gte('created_at', startOfMonth.toISOString());
-
-      if (branch?.id) {
-        monthQuery = monthQuery.eq('branch_id', branch.id);
-      }
-
-      const { data: monthSalesData } = await monthQuery;
-      const monthlyRevenue = monthSalesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
-      const monthlyProfit = monthSalesData?.reduce((sum, s) => 
-        sum + (s.items?.reduce((p, i: { profit: number }) => p + Number(i.profit), 0) || 0), 0
-      ) || 0;
-
-      // Last month's revenue for comparison
-      let lastMonthQuery = supabase
-        .from('sales')
-        .select('total')
-        .eq('business_id', business.id)
-        .gte('created_at', startOfLastMonth.toISOString())
-        .lte('created_at', endOfLastMonth.toISOString());
-
-      if (branch?.id) {
-        lastMonthQuery = lastMonthQuery.eq('branch_id', branch.id);
-      }
-
-      const { data: lastMonthSalesData } = await lastMonthQuery;
-      const lastMonthRevenue = lastMonthSalesData?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
-
-      // Total orders today
-      const totalOrders = todaySalesData?.length || 0;
-
-      // Total products
-      const { count: totalProducts } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true })
-        .eq('business_id', business.id)
-        .eq('is_active', true);
-
-      // Best seller today
+      // Best seller today (by quantity)
       let bestSellerToday: string | null = null;
       const productQuantities = new Map<string, { name: string; qty: number }>();
       
-      for (const sale of todaySalesData || []) {
+      for (const sale of todayOrders || []) {
         for (const item of sale.items || []) {
-          const typedItem = item as { quantity: number; product: { name: string } | null };
-          const productName = typedItem.product?.name;
-          if (productName) {
-            const existing = productQuantities.get(productName);
-            if (existing) {
-              existing.qty += typedItem.quantity;
-            } else {
-              productQuantities.set(productName, { name: productName, qty: typedItem.quantity });
-            }
-          }
+          const typedItem = item as unknown as { quantity: number; product?: { name?: string } | null; product_id?: string };
+          const name =
+            typedItem.product?.name ??
+            (typedItem.product_id ? (products.find((p) => p.id === typedItem.product_id)?.name ?? null) : null);
+          if (!name) continue;
+          const existing = productQuantities.get(name);
+          if (existing) existing.qty += Number(typedItem.quantity ?? 0);
+          else productQuantities.set(name, { name, qty: Number(typedItem.quantity ?? 0) });
         }
       }
       
@@ -148,9 +121,9 @@ export function useDashboardStats() {
 
       // Busiest hour today
       let busiestHour: number | null = null;
-      if (todaySalesData && todaySalesData.length > 0) {
+      if (todayOrders && todayOrders.length > 0) {
         const hourCounts = new Map<number, number>();
-        for (const sale of todaySalesData) {
+        for (const sale of todayOrders) {
           const hour = new Date(sale.created_at).getHours();
           hourCounts.set(hour, (hourCounts.get(hour) || 0) + 1);
         }
@@ -182,21 +155,18 @@ export function useDashboardStats() {
 }
 
 export function useLowStockProducts() {
-  const { business } = useBusiness();
+  const { business, warehouse } = useBusiness();
+  const connectivity = useConnectivityStatus();
 
   return useQuery({
-    queryKey: ['low-stock', business?.id],
+    queryKey: ['low-stock', business?.id, warehouse?.id, connectivity.lastSyncAt, connectivity.queueCount, connectivity.status],
     queryFn: async () => {
       if (!business?.id) return [];
-
-      const { data, error } = await supabase
-        .from('v_low_stock')
-        .select('*')
-        .eq('business_id', business.id)
-        .limit(10);
-
-      if (error) throw error;
-      return data;
+      const products = await listProducts(business.id, warehouse?.id ?? null);
+      return products
+        .filter((p) => (p.total_stock ?? 0) < (p.min_stock ?? 0))
+        .sort((a, b) => (a.total_stock ?? 0) - (b.total_stock ?? 0))
+        .slice(0, 10);
     },
     enabled: !!business?.id
   });
@@ -204,56 +174,45 @@ export function useLowStockProducts() {
 
 export function useTopProducts() {
   const { business, branch } = useBusiness();
+  const connectivity = useConnectivityStatus();
   const startOfMonth = new Date();
   startOfMonth.setDate(1);
   startOfMonth.setHours(0, 0, 0, 0);
 
   return useQuery({
-    queryKey: ['top-products', business?.id, branch?.id],
+    queryKey: ['top-products', business?.id, branch?.id, connectivity.lastSyncAt, connectivity.queueCount, connectivity.status],
     queryFn: async () => {
       if (!business?.id) return [];
 
-      // Get sale items with product info
-      let query = supabase
-        .from('sale_items')
-        .select(`
-          quantity,
-          total,
-          product:products(id, name),
-          sale:sales!inner(business_id, branch_id, created_at)
-        `)
-        .eq('sales.business_id', business.id)
-        .gte('sales.created_at', startOfMonth.toISOString());
+      const orders = await listOrders({
+        businessId: business.id,
+        branchId: branch?.id,
+        limit: 20000,
+        start: startOfMonth,
+      });
 
-      if (branch?.id) {
-        query = query.eq('sales.branch_id', branch.id);
-      }
+      const products = await listProducts(business.id, null);
+      const nameById = new Map(products.map((p) => [p.id, p.name]));
 
-      const { data, error } = await query;
-
-      if (error) throw error;
-
-      // Aggregate by product
       const productMap = new Map<string, { name: string; quantity: number; revenue: number }>();
-      
-      for (const item of data || []) {
-        const product = item.product as { id: string; name: string } | null;
-        if (!product) continue;
-
-        const existing = productMap.get(product.id);
-        if (existing) {
-          existing.quantity += item.quantity;
-          existing.revenue += Number(item.total);
-        } else {
-          productMap.set(product.id, {
-            name: product.name,
-            quantity: item.quantity,
-            revenue: Number(item.total)
-          });
+      for (const order of orders) {
+        for (const it of order.items || []) {
+          const productId = (it as unknown as { product_id: string }).product_id;
+          const name = nameById.get(productId) ?? "Unknown";
+          const existing = productMap.get(productId);
+          if (existing) {
+            existing.quantity += Number((it as any).quantity ?? 0);
+            existing.revenue += Number((it as any).total ?? 0);
+          } else {
+            productMap.set(productId, {
+              name,
+              quantity: Number((it as any).quantity ?? 0),
+              revenue: Number((it as any).total ?? 0),
+            });
+          }
         }
       }
 
-      // Sort by revenue and take top 5
       return Array.from(productMap.entries())
         .map(([id, data]) => ({ id, ...data }))
         .sort((a, b) => b.revenue - a.revenue)
@@ -265,9 +224,10 @@ export function useTopProducts() {
 
 export function useSalesChart() {
   const { business, branch } = useBusiness();
+  const connectivity = useConnectivityStatus();
 
   return useQuery({
-    queryKey: ['sales-chart', business?.id, branch?.id],
+    queryKey: ['sales-chart', business?.id, branch?.id, connectivity.lastSyncAt, connectivity.queueCount, connectivity.status],
     queryFn: async () => {
       if (!business?.id) return [];
 
@@ -279,29 +239,23 @@ export function useSalesChart() {
         days.push(date.toISOString().split('T')[0]);
       }
 
-      const result = [];
+      const result: Array<{ date: string; sales: number }> = [];
       for (const day of days) {
         const startOfDay = new Date(day);
         const endOfDay = new Date(day);
         endOfDay.setDate(endOfDay.getDate() + 1);
 
-        let query = supabase
-          .from('sales')
-          .select('total')
-          .eq('business_id', business.id)
-          .gte('created_at', startOfDay.toISOString())
-          .lt('created_at', endOfDay.toISOString());
-
-        if (branch?.id) {
-          query = query.eq('branch_id', branch.id);
-        }
-
-        const { data } = await query;
-        const total = data?.reduce((sum, s) => sum + Number(s.total), 0) || 0;
-
+        const orders = await listOrders({
+          businessId: business.id,
+          branchId: branch?.id,
+          limit: 5000,
+          start: startOfDay,
+          end: endOfDay,
+        });
+        const total = orders.reduce((sum, s) => sum + Number(s.total), 0);
         result.push({
           date: new Date(day).toLocaleDateString('en-US', { weekday: 'short' }),
-          sales: total
+          sales: total,
         });
       }
 
@@ -313,34 +267,21 @@ export function useSalesChart() {
 
 export function useRecentTransactions() {
   const { business, branch } = useBusiness();
+  const connectivity = useConnectivityStatus();
 
   return useQuery({
-    queryKey: ['recent-transactions', business?.id, branch?.id],
+    queryKey: ['recent-transactions', business?.id, branch?.id, connectivity.lastSyncAt, connectivity.queueCount, connectivity.status],
     queryFn: async () => {
       if (!business?.id) return [];
-
-      let query = supabase
-        .from('sales')
-        .select(`
-          id,
-          invoice_number,
-          total,
-          payment_method,
-          customer_name,
-          created_at
-        `)
-        .eq('business_id', business.id)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (branch?.id) {
-        query = query.eq('branch_id', branch.id);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      return data;
+      const orders = await listOrders({ businessId: business.id, branchId: branch?.id, limit: 5 });
+      return orders.map((o) => ({
+        id: o.id,
+        invoice_number: o.invoice_number,
+        total: o.total,
+        payment_method: o.payment_method,
+        customer_name: o.customer_name,
+        created_at: o.created_at,
+      }));
     },
     enabled: !!business?.id
   });

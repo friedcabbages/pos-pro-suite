@@ -7,6 +7,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { BusinessProvider } from "./contexts/BusinessContext";
 import { ImpersonationProvider } from "./contexts/ImpersonationContext";
 import { UpgradeModalProvider } from "@/contexts/UpgradeModalContext";
+import { DataLayerProvider } from "@/data/DataLayerProvider";
 import { ProtectedRoute, AdminRoute, OwnerRoute } from "./components/ProtectedRoute";
 import { FeatureRoute } from "@/components/FeatureRoute";
 import { DashboardLayout } from "./components/layout/DashboardLayout";
@@ -63,9 +64,10 @@ const App = () => (
         <AuthProvider>
           <ImpersonationProvider>
             <BusinessProvider>
-              <UpgradeModalProvider>
-              <ImpersonationBanner />
-              <Routes>
+              <DataLayerProvider>
+                <UpgradeModalProvider>
+                <ImpersonationBanner />
+                <Routes>
                 {/* Testing Hub - Development Entry Point */}
                 <Route path="/" element={<TestingHub />} />
                 
@@ -111,10 +113,7 @@ const App = () => (
                     <AdminRoute>
                       <FeatureRoute
                         featureKey="reports_advanced"
-                        requiredPlan="pro"
-                        title="Advanced Reports"
-                        description="Advanced analytics are available on Pro and Enterprise."
-                        upsell="This feature is available on the Pro Plan. Upgrade now to unlock Advanced Reports and more."
+                        fallbackPath="/reports"
                       >
                         <ReportsAdvanced />
                       </FeatureRoute>
@@ -128,10 +127,6 @@ const App = () => (
                     <AdminRoute>
                       <FeatureRoute
                         featureKey="purchase_orders"
-                        requiredPlan="pro"
-                        title="Purchase Orders"
-                        description="Purchase Orders are available on Pro and Enterprise."
-                        upsell="This feature is available on the Pro Plan. Upgrade now to unlock Expenses, Purchase Orders, and more."
                       >
                         <PurchaseOrders />
                       </FeatureRoute>
@@ -144,10 +139,6 @@ const App = () => (
                     <AdminRoute>
                       <FeatureRoute
                         featureKey="expenses"
-                        requiredPlan="pro"
-                        title="Expenses"
-                        description="Expense tracking is available on Pro and Enterprise."
-                        upsell="This feature is available on the Pro Plan. Upgrade now to unlock Expenses, Purchase Orders, and more."
                       >
                         <Expenses />
                       </FeatureRoute>
@@ -160,10 +151,6 @@ const App = () => (
                     <AdminRoute>
                       <FeatureRoute
                         featureKey="audit_logs_full"
-                        requiredPlan="enterprise"
-                        title="Audit Logs"
-                        description="Full audit logs and compliance mode are available on Enterprise."
-                        upsell="This feature is available on the Enterprise Plan. Upgrade now for full audit logs, compliance mode, and priority support."
                       >
                         <AuditLogs />
                       </FeatureRoute>
@@ -177,8 +164,9 @@ const App = () => (
                 
                 {/* 404 - Catch all */}
                 <Route path="*" element={<NotFound />} />
-              </Routes>
-              </UpgradeModalProvider>
+                </Routes>
+                </UpgradeModalProvider>
+              </DataLayerProvider>
             </BusinessProvider>
           </ImpersonationProvider>
         </AuthProvider>

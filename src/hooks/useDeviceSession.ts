@@ -37,6 +37,12 @@ export function useDeviceSession() {
     let cancelled = false;
 
     const ping = async () => {
+      // Offline-first: never block the POS when offline.
+      if (!navigator.onLine) {
+        setBlocked(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("device-session", {
         body: { device_id: deviceId, window_minutes: 10 },
       });
@@ -60,12 +66,16 @@ export function useDeviceSession() {
 
     void ping();
 
+    const onOnline = () => void ping();
+    window.addEventListener("online", onOnline);
+
     timerRef.current = window.setInterval(() => {
       void ping();
     }, 60_000);
 
     return () => {
       cancelled = true;
+      window.removeEventListener("online", onOnline);
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
   }, [business?.id, deviceId, plan.planName, upgrade]);

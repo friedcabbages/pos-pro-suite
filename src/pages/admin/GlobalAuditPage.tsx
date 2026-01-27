@@ -151,15 +151,15 @@ function getActionTitle(action: string): string {
     business_deleted: '🗑️ Business Deleted',
     user_disabled: '👤 User Disabled',
     user_role_changed: '🔄 Role Changed',
-    force_logout: '🔒 Force Logout',
+    force_logout: 'Force Logout',
     trial_extended: '📅 Trial Extended',
     plan_changed: '💳 Plan Changed',
     impersonation: '👁️ Impersonation',
     maintenance_toggled: '🔧 Maintenance Toggled',
     broadcast_created: '📢 Broadcast Created',
     access_denied: '🚫 Access Denied',
-    login: '🔓 Login',
-    logout: '🔒 Logout',
+    login: 'Login',
+    logout: 'Logout',
   };
   
   return titles[action] || action.replace(/_/g, ' ');

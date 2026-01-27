@@ -4,8 +4,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBusiness } from "@/contexts/BusinessContext";
 import { usePlanAccess } from "@/hooks/usePlanAccess";
-import { useUpgradeModal } from "@/contexts/UpgradeModalContext";
-import type { PlanFeatureKey, PlanName } from "@/lib/plan";
+import type { PlanFeatureKey } from "@/lib/plan";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -25,10 +24,8 @@ import {
   FileText,
   Tag,
   Crown,
-  Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type NavItem = {
   name: string;
@@ -37,7 +34,6 @@ type NavItem = {
   adminOnly?: boolean;
   ownerOnly?: boolean;
   featureKey?: PlanFeatureKey;
-  requiredPlan?: PlanName;
 };
 
 const navigation: NavItem[] = [
@@ -53,21 +49,12 @@ const navigation: NavItem[] = [
     icon: ClipboardList,
     adminOnly: true,
     featureKey: "purchase_orders",
-    requiredPlan: "pro",
   },
   { name: "Warehouses", href: "/warehouses", icon: Warehouse, adminOnly: true },
   { name: "Transactions", href: "/transactions", icon: Receipt, adminOnly: true },
-  { name: "Expenses", href: "/expenses", icon: DollarSign, adminOnly: true, featureKey: "expenses", requiredPlan: "pro" },
+  { name: "Expenses", href: "/expenses", icon: DollarSign, adminOnly: true, featureKey: "expenses" },
   { name: "Reports", href: "/reports", icon: TrendingUp, adminOnly: true },
-  {
-    name: "Advanced Reports",
-    href: "/reports-advanced",
-    icon: TrendingUp,
-    adminOnly: true,
-    featureKey: "reports_advanced",
-    requiredPlan: "pro",
-  },
-  { name: "Audit Logs", href: "/audit-logs", icon: FileText, adminOnly: true, featureKey: "audit_logs_full", requiredPlan: "enterprise" },
+  { name: "Audit Logs", href: "/audit-logs", icon: FileText, adminOnly: true, featureKey: "audit_logs_full" },
   { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
   { name: "Users", href: "/users", icon: Users, ownerOnly: true },
   { name: "Settings", href: "/settings", icon: Settings, ownerOnly: true },
@@ -80,9 +67,8 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { clearBusiness, userRole, isAdmin, isOwner, isCashier } = useBusiness();
+  const { clearBusiness, userRole, isAdmin, isOwner } = useBusiness();
   const plan = usePlanAccess();
-  const upgrade = useUpgradeModal();
 
   const handleLogout = async () => {
     setLoggingOut(true);
@@ -107,6 +93,7 @@ export function Sidebar() {
   const filteredNavigation = navigation.filter((item) => {
     if (item.ownerOnly && !isOwner) return false;
     if (item.adminOnly && !isAdmin && !isOwner) return false;
+    if (item.featureKey && !plan.canUse(item.featureKey)) return false;
     return true;
   });
 
@@ -142,53 +129,6 @@ export function Sidebar() {
           <div className="space-y-0.5">
             {filteredNavigation.map((item) => {
               const isActive = location.pathname === item.href;
-
-              const isLocked = !!item.featureKey && !plan.canUse(item.featureKey);
-              const tooltip = item.requiredPlan
-                ? `Available on ${item.requiredPlan.charAt(0).toUpperCase() + item.requiredPlan.slice(1)} plan`
-                : "Available on a higher plan";
-
-              if (isLocked) {
-                return (
-                  <Tooltip key={item.name}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          upgrade.open({
-                            reason: "feature",
-                            featureKey: item.featureKey!,
-                            requiredPlan: item.requiredPlan ?? "pro",
-                            message:
-                              item.featureKey === "expenses" || item.featureKey === "purchase_orders"
-                                ? "This feature is available on the Pro Plan. Upgrade now to unlock Expenses, Purchase Orders, and more."
-                                : "This feature is available on a higher plan. Upgrade now to unlock it and more.",
-                          })
-                        }
-                        className={cn(
-                          "flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
-                          "text-muted-foreground/60",
-                          collapsed && "justify-center",
-                          isActive && "bg-muted"
-                        )}
-                        aria-disabled="true"
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        {!collapsed && (
-                          <span className="flex items-center gap-2">
-                            <span>{item.name}</span>
-                            <span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                              <Lock className="h-3 w-3" />
-                              🔒
-                            </span>
-                          </span>
-                        )}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>{tooltip}</TooltipContent>
-                  </Tooltip>
-                );
-              }
 
               return (
                 <Link

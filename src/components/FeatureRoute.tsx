@@ -1,30 +1,17 @@
 import { usePlanAccess } from "@/hooks/usePlanAccess";
-import type { PlanFeatureKey, PlanName } from "@/lib/plan";
-import { LockedFeature } from "@/components/subscription/LockedFeature";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import type { PlanFeatureKey } from "@/lib/plan";
+import { Navigate, useLocation } from "react-router-dom";
 
 export function FeatureRoute(props: {
   featureKey: PlanFeatureKey;
-  requiredPlan: PlanName;
-  title: string;
-  description: string;
-  upsell: string;
+  fallbackPath?: string;
   children: React.ReactNode;
 }) {
   const plan = usePlanAccess();
+  const location = useLocation();
 
   if (!plan.canUse(props.featureKey)) {
-    return (
-      <DashboardLayout>
-        <LockedFeature
-          featureKey={props.featureKey}
-          requiredPlan={props.requiredPlan}
-          title={props.title}
-          description={props.description}
-          upsell={props.upsell}
-        />
-      </DashboardLayout>
-    );
+    return <Navigate to={props.fallbackPath ?? "/app"} state={{ from: location }} replace />;
   }
 
   return <>{props.children}</>;
