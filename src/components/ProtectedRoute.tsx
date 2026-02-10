@@ -1,6 +1,7 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBusiness } from "@/contexts/BusinessContext";
+import { useImpersonation } from "@/contexts/ImpersonationContext";
 import { Loader2 } from "lucide-react";
 
 interface ProtectedRouteProps {
@@ -9,8 +10,14 @@ interface ProtectedRouteProps {
   adminOnly?: boolean;
 }
 
-// Routes that cashiers can access
-const CASHIER_ALLOWED_ROUTES = ['/pos', '/products', '/app'];
+// Routes that cashiers can access (updated for prefix-based)
+const getCashierAllowedRoutes = (businessType: string): string[] => {
+  const prefix = businessType === 'retail' ? '/retail' : businessType === 'fnb' ? '/fnb' : '';
+  return [
+    '/app',
+    ...(prefix ? [`${prefix}/pos`, `${prefix}/cashier`, `${prefix}/products`, `${prefix}/menu`] : [])
+  ];
+};
 
 export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedRouteProps) {
   const { user, loading: authLoading, initialized: authInitialized } = useAuth();
@@ -24,9 +31,12 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     isSuperAdmin,
     businessStatus,
     isSubscriptionActive,
-    isTrialExpired
+    isTrialExpired,
+    superAdminChecked
   } = useBusiness();
+  const { isImpersonating } = useImpersonation();
   const location = useLocation();
+
 
   // Wait for auth to fully initialize before making any decisions
   if (!authInitialized || authLoading) {
@@ -47,7 +57,8 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
   }
 
   // Wait for business data to load before deciding
-  if (businessLoading) {
+  // During impersonation, wait longer for business data to load
+  if (businessLoading || !superAdminChecked || (isImpersonating && (!business || !userRole))) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-3">
@@ -62,16 +73,41 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
   // Super admins who want to access /admin routes should go there directly
   // Super admins accessing client routes will be treated as having no business (which is correct)
   // The SuperAdminLayout handles /admin route protection separately
-  if (isSuperAdmin) {
+  // BUT: Skip redirect if impersonating (superadmin is impersonating a business)
+  if (isSuperAdmin && !isImpersonating) {
     console.log('[ProtectedRoute] Super admin detected accessing client route');
-    // Super admins don't have a business context, so they'll hit the "no business/role" check below
-    // This is intentional - super admins should use /admin, not client routes
+    return <Navigate to="/admin" replace />;
   }
 
-  // User logged in but no business/role - B2B model requires admin provisioning
+  // Check if logout is in progress - don't redirect to onboarding during logout
+  const logoutInProgress = (() => {
+    try {
+      return localStorage.getItem("logout_in_progress") === "1";
+    } catch {
+      return false;
+    }
+  })();
+
+  // User logged in but no business/role - send to onboarding
+  // But don't redirect if logout is in progress or if impersonating (business data might still be loading)
   if (!business || !userRole) {
-    console.log('[ProtectedRoute] No business/role, redirecting to /no-access');
-    return <Navigate to="/no-access" replace />;
+    if (logoutInProgress) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+    // During impersonation, always wait for business data to load (don't redirect to onboarding)
+    if (isImpersonating) {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      );
+    }
+    console.log('[ProtectedRoute] No business/role, redirecting to /onboarding');
+    return <Navigate to="/onboarding" replace />;
   }
 
   // Check business status - suspended accounts
@@ -92,10 +128,95 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     return <Navigate to="/subscription-required" replace />;
   }
 
+  // Business type route enforcement - prefix-based standalone
+  const getLandingRouteForBusinessType = (businessType: string): string => {
+    switch (businessType) {
+      case 'retail':
+        return '/retail/pos';
+      case 'fnb':
+        return '/fnb/dashboard';
+      case 'service':
+        return '/service/dashboard';
+      case 'venue':
+        return '/venue/dashboard';
+      default:
+        return '/retail/pos';
+    }
+  };
+
+  // Prefix-based route enforcement: users can only access routes matching their business type prefix
+  if (business && !isImpersonating) {
+    const currentPath = location.pathname;
+    const businessType = business.business_type;
+    
+    // Global routes that everyone can access (not business-type-specific)
+    const globalRoutes = ['/app', '/users', '/settings', '/subscription', '/activity'];
+    const isGlobalRoute = globalRoutes.some(route => currentPath === route || currentPath.startsWith(route + '/'));
+    
+    // Public ordering routes (customer-facing)
+    const isPublicOrderRoute = currentPath.startsWith('/order/');
+    
+    if (!isGlobalRoute && !isPublicOrderRoute) {
+      // Check prefix-based access
+      let allowedPrefix = '';
+      switch (businessType) {
+        case 'retail':
+          allowedPrefix = '/retail';
+          break;
+        case 'fnb':
+          allowedPrefix = '/fnb';
+          break;
+        case 'service':
+          allowedPrefix = '/service';
+          break;
+        case 'venue':
+          allowedPrefix = '/venue';
+          break;
+        default:
+          allowedPrefix = '/retail';
+      }
+      
+      // If accessing old routes (without prefix), redirect to new prefixed route
+      const oldRouteMap: Record<string, Record<string, string>> = {
+        retail: {
+          '/pos': '/retail/pos',
+          '/products': '/retail/products',
+          '/categories': '/retail/categories',
+          '/inventory': '/retail/inventory',
+          '/warehouses': '/retail/warehouses',
+          '/transactions': '/retail/transactions',
+          '/reports': '/retail/reports',
+          '/reports-advanced': '/retail/reports-advanced',
+          '/suppliers': '/retail/suppliers',
+          '/purchase-orders': '/retail/purchase-orders',
+          '/expenses': '/retail/expenses',
+          '/audit-logs': '/retail/audit-logs',
+        },
+        fnb: {
+          '/fnb': '/fnb/dashboard',
+        },
+      };
+      
+      if (oldRouteMap[businessType]?.[currentPath]) {
+        const newRoute = oldRouteMap[businessType][currentPath];
+        console.log(`[ProtectedRoute] Redirecting old route ${currentPath} to ${newRoute}`);
+        return <Navigate to={newRoute} replace />;
+      }
+      
+      // Enforce prefix-based access
+      if (!currentPath.startsWith(allowedPrefix + '/') && currentPath !== allowedPrefix) {
+        const expectedRoute = getLandingRouteForBusinessType(businessType);
+        console.log(`[ProtectedRoute] Business type ${businessType} cannot access ${currentPath}, redirecting to ${expectedRoute}`);
+        return <Navigate to={expectedRoute} replace />;
+      }
+    }
+  }
+
   // Role-based access control
   if (adminOnly && !isAdmin && !isOwner) {
-    console.log('[ProtectedRoute] Admin required, user is cashier, redirecting to /pos');
-    return <Navigate to="/pos" replace />;
+    const defaultRoute = business?.business_type === 'retail' ? '/retail/pos' : business?.business_type === 'fnb' ? '/fnb/cashier' : '/app';
+    console.log('[ProtectedRoute] Admin required, user is cashier, redirecting to', defaultRoute);
+    return <Navigate to={defaultRoute} replace />;
   }
 
   if (requiredRole === 'owner' && !isOwner) {
@@ -104,9 +225,13 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
   }
 
   // Cashier route restrictions
-  if (isCashier && !CASHIER_ALLOWED_ROUTES.includes(location.pathname)) {
-    console.log('[ProtectedRoute] Cashier accessing restricted route, redirecting to /pos');
-    return <Navigate to="/pos" replace />;
+  if (isCashier && business) {
+    const allowedRoutes = getCashierAllowedRoutes(business.business_type);
+    if (!allowedRoutes.some(route => location.pathname === route || location.pathname.startsWith(route + '/'))) {
+      const defaultRoute = business.business_type === 'retail' ? '/retail/pos' : '/fnb/cashier';
+      console.log('[ProtectedRoute] Cashier accessing restricted route, redirecting to', defaultRoute);
+      return <Navigate to={defaultRoute} replace />;
+    }
   }
 
   // All checks passed - render children

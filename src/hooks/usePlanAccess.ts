@@ -16,7 +16,7 @@ type Limits = {
 };
 
 export function usePlanAccess() {
-  const { currentPlan, businessStatus, trialDaysRemaining } = useSubscriptionStatus();
+  const { currentPlan, businessStatus, trialDaysRemaining, planReady } = useSubscriptionStatus();
 
   const planName = (currentPlan?.name as PlanName | undefined) ?? "basic";
   const displayName = PLAN_LABEL[planName] ?? "Basic";
@@ -33,6 +33,7 @@ export function usePlanAccess() {
     maxBranches: currentPlan?.max_branches ?? null,
     maxDevices: (currentPlan as any)?.max_devices ?? null,
   };
+  const resolvedDeviceLimit = limits.maxDevices ?? limits.maxUsers;
 
   return {
     planName,
@@ -40,7 +41,9 @@ export function usePlanAccess() {
     businessStatus,
     trialDaysRemaining,
     limits,
+    resolvedDeviceLimit,
     features,
+    isPlanReady: planReady,
     canUse: (feature: PlanFeatureKey) => features.has(feature),
     isComplianceMode: features.has("compliance_mode"),
     meetsPlan,

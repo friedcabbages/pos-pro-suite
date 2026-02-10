@@ -44,7 +44,8 @@ import {
   Calendar,
   DollarSign,
   Settings,
-  History
+  History,
+  UserCog
 } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { useAdminBusinesses } from '@/hooks/useSuperAdmin';
@@ -56,11 +57,13 @@ import {
   useSuspendWithReason,
   useForceLogout,
   useUpgradePlan,
+  useUpdateBusinessType,
   useUpdateUserRole,
   useDisableUser,
   useSendPasswordReset,
   useToggleFeatureFlag,
-  useDeleteBusiness
+  useDeleteBusiness,
+  useUpdateUsername
 } from '@/hooks/useMissionControl';
 import { useImpersonation } from '@/contexts/ImpersonationContext';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -90,19 +93,23 @@ export default function BusinessDetailPage() {
   const suspendWithReason = useSuspendWithReason();
   const forceLogout = useForceLogout();
   const upgradePlan = useUpgradePlan();
+  const updateBusinessType = useUpdateBusinessType();
   const updateUserRole = useUpdateUserRole();
   const disableUser = useDisableUser();
   const sendPasswordReset = useSendPasswordReset();
   const toggleFeatureFlag = useToggleFeatureFlag();
   const deleteBusiness = useDeleteBusiness();
+  const updateUsername = useUpdateUsername();
 
   // Dialog states
   const [extendTrialDialog, setExtendTrialDialog] = useState(false);
   const [suspendDialog, setSuspendDialog] = useState(false);
   const [deleteDialog, setDeleteDialog] = useState(false);
   const [upgradeDialog, setUpgradeDialog] = useState(false);
+  const [businessTypeDialog, setBusinessTypeDialog] = useState(false);
+  const [newBusinessType, setNewBusinessType] = useState<'retail' | 'fnb' | 'service' | 'venue'>('retail');
   const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [userActionDialog, setUserActionDialog] = useState<'role' | 'disable' | null>(null);
+  const [userActionDialog, setUserActionDialog] = useState<'role' | 'disable' | 'username' | null>(null);
 
   // Form states
   const [trialDays, setTrialDays] = useState(7);
@@ -110,6 +117,7 @@ export default function BusinessDetailPage() {
   const [newRole, setNewRole] = useState('');
   const [newPlan, setNewPlan] = useState('active');
   const [manualPayment, setManualPayment] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
 
   const business = businesses?.find(b => b.id === businessId);
 
@@ -165,6 +173,14 @@ export default function BusinessDetailPage() {
     });
   };
 
+  const handleUpdateBusinessType = () => {
+    updateBusinessType.mutate({ businessId: business.id, businessType: newBusinessType }, {
+      onSuccess: () => {
+        setBusinessTypeDialog(false);
+      }
+    });
+  };
+
   const handleDelete = () => {
     deleteBusiness.mutate(business.id, {
       onSuccess: () => navigate('/admin')
@@ -198,6 +214,36 @@ export default function BusinessDetailPage() {
         }
       });
     }
+  };
+
+  const handleUsernameChange = () => {
+    if (!selectedUser) return;
+    
+    const usernameTrimmed = newUsername.trim() || null;
+    
+    // Client-side validation
+    if (usernameTrimmed) {
+      const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/;
+      if (!usernamePattern.test(usernameTrimmed)) {
+        // Error will be shown by the mutation's onError handler
+        // But we can also show it immediately for better UX
+        return;
+      }
+    }
+    
+    updateUsername.mutate({ 
+      userId: selectedUser.user_id, 
+      username: usernameTrimmed 
+    }, {
+      onSuccess: () => {
+        setUserActionDialog(null);
+        setSelectedUser(null);
+        setNewUsername('');
+      },
+      onError: () => {
+        // Error already shown by hook's onError
+      }
+    });
   };
 
   const getStatusBadge = (status: string) => {
@@ -251,6 +297,13 @@ export default function BusinessDetailPage() {
           <DollarSign className="h-4 w-4 mr-2" />
           Manage Plan
         </Button>
+        <Button variant="outline" onClick={() => {
+          setNewBusinessType(business.business_type || 'retail');
+          setBusinessTypeDialog(true);
+        }}>
+          <Settings className="h-4 w-4 mr-2" />
+          Change Business Type
+        </Button>
         {business.status !== 'suspended' ? (
           <Button variant="outline" className="text-destructive" onClick={() => setSuspendDialog(true)}>
             <Ban className="h-4 w-4 mr-2" />
@@ -269,13 +322,23 @@ export default function BusinessDetailPage() {
       </div>
 
       {/* Business Info */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm text-muted-foreground">Status</CardTitle>
           </CardHeader>
           <CardContent>
             {getStatusBadge(business.status)}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">Business Type</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Badge variant="outline" className="capitalize">
+              {business.business_type || 'retail'}
+            </Badge>
           </CardContent>
         </Card>
         <Card>
@@ -340,6 +403,7 @@ export default function BusinessDetailPage() {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
+                      <TableHead>Username</TableHead>
                       <TableHead>Role</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Actions</TableHead>
@@ -350,6 +414,7 @@ export default function BusinessDetailPage() {
                       <TableRow key={user.user_id}>
                         <TableCell>{user.profile?.full_name || 'Unknown'}</TableCell>
                         <TableCell>{user.email || '-'}</TableCell>
+                        <TableCell>{user.profile?.username || '-'}</TableCell>
                         <TableCell>{getRoleBadge(user.role)}</TableCell>
                         <TableCell>
                           <Badge variant={user.disabled ? 'destructive' : 'default'}>
@@ -386,6 +451,18 @@ export default function BusinessDetailPage() {
                               disabled={!user.email}
                             >
                               <Mail className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUser(user);
+                                setNewUsername(user.profile?.username || '');
+                                setUserActionDialog('username');
+                              }}
+                              title="Edit username"
+                            >
+                              <UserCog className="h-4 w-4" />
                             </Button>
                           </div>
                         </TableCell>
@@ -567,6 +644,51 @@ export default function BusinessDetailPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={businessTypeDialog} onOpenChange={setBusinessTypeDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Business Type</DialogTitle>
+            <DialogDescription>
+              Update the business type. This will change which POS module the business owner accesses after login.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Current Business Type</Label>
+              <Badge variant="outline" className="capitalize">
+                {business.business_type || 'retail'}
+              </Badge>
+            </div>
+            <div className="space-y-2">
+              <Label>New Business Type *</Label>
+              <Select value={newBusinessType} onValueChange={(value) => setNewBusinessType(value as 'retail' | 'fnb' | 'service' | 'venue')}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="retail">Retail</SelectItem>
+                  <SelectItem value="fnb">Food & Beverage</SelectItem>
+                  <SelectItem value="service">Service (Barbershop, etc.)</SelectItem>
+                  <SelectItem value="venue">Venue (Badminton/Futsal/Rental)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Changing the business type will redirect users to the appropriate POS module on their next login.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBusinessTypeDialog(false)}>Cancel</Button>
+            <Button 
+              onClick={handleUpdateBusinessType} 
+              disabled={updateBusinessType.isPending || newBusinessType === (business.business_type || 'retail')}
+            >
+              {updateBusinessType.isPending ? 'Updating...' : 'Update Business Type'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={userActionDialog === 'role'} onOpenChange={() => setUserActionDialog(null)}>
         <DialogContent>
           <DialogHeader>
@@ -617,6 +739,38 @@ export default function BusinessDetailPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={userActionDialog === 'username'} onOpenChange={() => setUserActionDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Username</DialogTitle>
+            <DialogDescription>Update username for {selectedUser?.profile?.full_name || selectedUser?.email || 'user'}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Username (optional)</Label>
+              <Input
+                value={newUsername}
+                onChange={(e) => setNewUsername(e.target.value)}
+                placeholder="username (3-30 chars, letters, numbers, underscore)"
+                pattern="[a-zA-Z0-9_]{3,30}"
+              />
+              <p className="text-xs text-muted-foreground">
+                Leave empty to remove username. If set, user can login using this username instead of email.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setUserActionDialog(null);
+              setNewUsername('');
+            }}>Cancel</Button>
+            <Button onClick={handleUsernameChange} disabled={updateUsername.isPending}>
+              {updateUsername.isPending ? 'Updating...' : 'Update Username'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={deleteDialog} onOpenChange={setDeleteDialog}>
         <AlertDialogContent>

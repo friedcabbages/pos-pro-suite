@@ -1,9 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './AuthContext';
+import { useImpersonation } from './ImpersonationContext';
 
 type AppRole = 'owner' | 'admin' | 'cashier';
 type BusinessStatus = 'trial' | 'active' | 'expired' | 'suspended';
+type BusinessType = 'retail' | 'fnb' | 'service' | 'venue';
 
 interface Business {
   id: string;
@@ -16,6 +18,7 @@ interface Business {
   email: string | null;
   status: BusinessStatus;
   trial_end_at: string | null;
+  business_type: BusinessType;
 }
 
 interface Branch {
@@ -55,6 +58,7 @@ interface BusinessContextType {
   isAdmin: boolean;
   isCashier: boolean;
   isSuperAdmin: boolean;
+  superAdminChecked: boolean;
   businessStatus: BusinessStatus | null;
   isSubscriptionActive: boolean;
   isTrialExpired: boolean;
@@ -69,6 +73,7 @@ const BusinessContext = createContext<BusinessContextType | undefined>(undefined
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const { user, initialized: authInitialized } = useAuth();
+  const { isImpersonating, businessId: impersonationBusinessId } = useImpersonation();
   const [business, setBusiness] = useState<Business | null>(null);
   const [branch, setBranch] = useState<Branch | null>(null);
   const [warehouse, setWarehouse] = useState<Warehouse | null>(null);
@@ -77,8 +82,10 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [superAdminChecked, setSuperAdminChecked] = useState(false);
   const fetchingRef = useRef(false);
   const lastUserIdRef = useRef<string | null>(null);
+  const lastImpersonationBusinessIdRef = useRef<string | null>(null);
 
   const clearBusiness = useCallback(() => {
     console.log('[Business] Clearing state');
@@ -100,6 +107,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     if (!user) {
       console.log('[Business] No user, clearing state');
       clearBusiness();
+      setSuperAdminChecked(false);
       setLoading(false);
       return;
     }
@@ -109,71 +117,212 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     console.log('[Business] Fetching data for user:', user.id);
 
     try {
-      // 1. Check super admin first
+      // 1. Check super admin first (skip if impersonating)
       // SECURITY: This check is via edge function which validates JWT and checks super_admins table
-      try {
-        const { data: adminCheck, error: adminErr } =
-          await supabase.functions.invoke('admin-actions', {
-            body: { action: 'check_super_admin' },
-          });
+      // During impersonation, skip superadmin check and load business data directly
+      if (!isImpersonating) {
+        try {
+          const { data: adminCheck, error: adminErr } =
+            await supabase.functions.invoke('admin-actions', {
+              body: { action: 'check_super_admin' },
+            });
 
-        // SECURITY: Only set super admin if explicitly true (fail closed)
-        if (!adminErr && adminCheck?.is_super_admin === true) {
-          console.log('[Business] Super admin detected, skipping business context');
-          setIsSuperAdmin(true);
+          // SECURITY: Only set super admin if explicitly true (fail closed)
+          if (!adminErr && adminCheck?.is_super_admin === true) {
+            console.log('[Business] Super admin detected, skipping business context');
+            setIsSuperAdmin(true);
+            setSuperAdminChecked(true);
 
-          // Super admin does not need business context
-          setUserRole(null);
-          setBusiness(null);
-          setBranch(null);
-          setWarehouse(null);
-          setBranches([]);
-          setWarehouses([]);
+            // Super admin does not need business context
+            setUserRole(null);
+            setBusiness(null);
+            setBranch(null);
+            setWarehouse(null);
+            setBranches([]);
+            setWarehouses([]);
 
-          lastUserIdRef.current = user.id;
+            lastUserIdRef.current = user.id;
+            fetchingRef.current = false;
+            setLoading(false);
+            return;
+          }
+          
+          // Not super admin or error - continue with normal flow
+          setIsSuperAdmin(false);
+          setSuperAdminChecked(true);
+        } catch (err) {
+          // On any error, assume NOT super admin (fail closed)
+          console.error('[Business] Super admin check failed:', err);
+          setIsSuperAdmin(false);
+          setSuperAdminChecked(true);
+        }
+      } else {
+        setIsSuperAdmin(false);
+        setSuperAdminChecked(true);
+      }
+
+      // 2. Normal user flow (or impersonation flow)
+      let roleData: UserRole | null = null;
+      let targetBusinessId: string | null = null;
+
+      if (isImpersonating && impersonationBusinessId) {
+        // During impersonation, use edge function to get business data (bypasses RLS)
+        // This is necessary because superadmin doesn't have direct access to businesses table via RLS
+        const { data: businessResponse, error: businessLookupError } = await supabase.functions.invoke('admin-actions', {
+          body: { action: 'get_business_for_impersonation', business_id: impersonationBusinessId },
+        });
+
+        if (businessLookupError || !businessResponse?.business) {
+          console.error('[Business] Impersonation business lookup error:', businessLookupError);
+          fetchingRef.current = false;
+          setLoading(false);
           return;
         }
+
+        const impersonationBusiness = businessResponse.business;
+
+        // Find role for the owner of this business, or any role in this business
+        let impersonationRoleData = null;
+        let impersonationRoleError = null;
         
-        // Not super admin or error - continue with normal flow
-        setIsSuperAdmin(false);
-      } catch (err) {
-        // On any error, assume NOT super admin (fail closed)
-        console.error('[Business] Super admin check failed:', err);
-        setIsSuperAdmin(false);
-      }
+        // First try to find owner's role
+        const { data: ownerRoleData, error: ownerRoleError } = await supabase
+          .from('user_roles')
+          .select('*')
+          .eq('business_id', impersonationBusinessId)
+          .eq('user_id', impersonationBusiness.owner_id)
+          .maybeSingle();
 
-      // 2. Normal user flow
-      const { data: roleData, error: roleError } = await supabase
-        .from('user_roles')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle();
+        if (!ownerRoleError && ownerRoleData) {
+          impersonationRoleData = ownerRoleData;
+        } else {
+          // If owner role not found, try to find any role in this business
+          const { data: anyRoleData, error: anyRoleError } = await supabase
+            .from('user_roles')
+            .select('*')
+            .eq('business_id', impersonationBusinessId)
+            .order('role', { ascending: true }) // owner first, then admin, then cashier
+            .limit(1)
+            .maybeSingle();
 
-      if (roleError) {
-        console.error('[Business] Role fetch error:', roleError);
-        return;
-      }
+          if (!anyRoleError && anyRoleData) {
+            impersonationRoleData = anyRoleData;
+          } else {
+            impersonationRoleError = anyRoleError || ownerRoleError;
+          }
+        }
 
-      if (!roleData) {
-        console.log('[Business] No role found - user needs onboarding');
-        clearBusiness();
+        if (impersonationRoleError) {
+          console.error('[Business] Impersonation role fetch error:', impersonationRoleError);
+          fetchingRef.current = false;
+          setLoading(false);
+          return;
+        }
+
+        // If no role found, create a dummy role for impersonation purposes
+        if (!impersonationRoleData) {
+          console.log('[Business] No role found for impersonated business, creating dummy role');
+          // Create a dummy role object for impersonation
+          impersonationRoleData = {
+            id: 'impersonation-dummy',
+            user_id: impersonationBusiness.owner_id || user.id,
+            business_id: impersonationBusinessId,
+            branch_id: null,
+            role: 'owner' as AppRole,
+          } as UserRole;
+        }
+
+        roleData = impersonationRoleData as UserRole;
+        targetBusinessId = impersonationBusinessId;
+
+        // Set role and use business data from edge function response
+        setUserRole(roleData);
+        setBusiness(impersonationBusiness as Business);
+
+        // Get all branches for this business
+        const { data: branchesData } = await supabase
+          .from('branches')
+          .select('*')
+          .eq('business_id', impersonationBusinessId)
+          .eq('is_active', true);
+
+        if (branchesData && branchesData.length > 0) {
+          setBranches(branchesData as Branch[]);
+
+          const defaultBranch = roleData.branch_id
+            ? branchesData.find(b => b.id === roleData.branch_id) || branchesData[0]
+            : branchesData[0];
+
+          setBranch(defaultBranch as Branch);
+
+          // Get warehouses for the selected branch
+          const { data: warehousesData } = await supabase
+            .from('warehouses')
+            .select('*')
+            .eq('branch_id', defaultBranch.id)
+            .eq('is_active', true);
+
+          if (warehousesData && warehousesData.length > 0) {
+            setWarehouses(warehousesData as Warehouse[]);
+            setWarehouse(warehousesData[0] as Warehouse);
+          } else {
+            setWarehouses([]);
+            setWarehouse(null);
+          }
+        } else {
+          setBranches([]);
+          setBranch(null);
+          setWarehouses([]);
+          setWarehouse(null);
+        }
+
         lastUserIdRef.current = user.id;
+        fetchingRef.current = false;
+        setLoading(false);
         return;
+      } else {
+        // Normal flow: get role for current user
+        const { data: normalRoleData, error: roleError } = await supabase
+          .from('user_roles')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle();
+
+        if (roleError) {
+          console.error('[Business] Role fetch error:', roleError);
+          fetchingRef.current = false;
+          setLoading(false);
+          return;
+        }
+
+        if (!normalRoleData) {
+          console.log('[Business] No role found - user needs onboarding');
+          clearBusiness();
+          lastUserIdRef.current = user.id;
+          fetchingRef.current = false;
+          setLoading(false);
+          return;
+        }
+
+        roleData = normalRoleData as UserRole;
+        targetBusinessId = roleData.business_id;
       }
 
-      setUserRole(roleData as UserRole);
+      setUserRole(roleData);
 
-      // Get business with status and trial_end_at
+      // Get business with status, trial_end_at, and business_type
       const { data: businessData, error: businessError } = await supabase
         .from('businesses')
-        .select('id, name, currency, tax_rate, logo_url, address, phone, email, status, trial_end_at')
-        .eq('id', roleData.business_id)
+        .select('id, name, currency, tax_rate, logo_url, address, phone, email, status, trial_end_at, business_type')
+        .eq('id', targetBusinessId)
         .single();
 
       if (businessError || !businessData) {
         console.error('[Business] Business fetch error:', businessError);
         clearBusiness();
         lastUserIdRef.current = user.id;
+        fetchingRef.current = false;
+        setLoading(false);
         return;
       }
 
@@ -219,9 +368,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       fetchingRef.current = false;
     }
-  }, [user, clearBusiness]);
+  }, [user, clearBusiness, isImpersonating, impersonationBusinessId]);
 
-  // Only fetch when auth is ready and user changes
+  // Only fetch when auth is ready and user changes, or when impersonation state changes
   useEffect(() => {
     if (!authInitialized) {
       console.log('[Business] Waiting for auth to initialize');
@@ -232,15 +381,27 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       console.log('[Business] No user after auth init, clearing');
       clearBusiness();
       lastUserIdRef.current = null;
+      setSuperAdminChecked(false);
       setLoading(false);
       return;
     }
 
-    // User changed or first load
-    if (lastUserIdRef.current !== user.id) {
+    // User changed, first load, or impersonation state changed
+    const userChanged = lastUserIdRef.current !== user.id;
+    const impersonationChanged = isImpersonating && lastImpersonationBusinessIdRef.current !== impersonationBusinessId;
+    const impersonationStopped = !isImpersonating && lastImpersonationBusinessIdRef.current !== null;
+    
+    if (userChanged || impersonationChanged || impersonationStopped) {
+      // Update refs before fetching
+      if (isImpersonating && impersonationBusinessId) {
+        lastImpersonationBusinessIdRef.current = impersonationBusinessId;
+      } else if (!isImpersonating) {
+        lastImpersonationBusinessIdRef.current = null;
+      }
+      
       fetchBusinessData();
     }
-  }, [user, authInitialized, fetchBusinessData, clearBusiness]);
+  }, [user, authInitialized, fetchBusinessData, clearBusiness, isImpersonating, impersonationBusinessId]);
 
   const selectBranch = async (branchId: string) => {
     const selectedBranch = branches.find(b => b.id === branchId);
@@ -324,6 +485,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       isAdmin,
       isCashier,
       isSuperAdmin,
+      superAdminChecked,
       businessStatus: subscriptionStatus.businessStatus,
       isSubscriptionActive: subscriptionStatus.isSubscriptionActive,
       isTrialExpired: subscriptionStatus.isTrialExpired,

@@ -20,8 +20,10 @@ import {
   Bell,
   Save,
   Loader2,
+  User,
 } from "lucide-react";
 import { useBusiness } from "@/contexts/BusinessContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -30,9 +32,11 @@ import type { ConnectivityMode } from "@/data/connectivityMode";
 
 export default function Settings() {
   const { business, refetchBusiness } = useBusiness();
+  const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [settingsLoading, setSettingsLoading] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
   const { mode: connectivityMode, setMode: setConnectivityMode } = useConnectivityMode();
   
   const [businessData, setBusinessData] = useState({
@@ -41,6 +45,12 @@ export default function Settings() {
     phone: "",
     address: "",
     currency: "USD",
+  });
+
+  const [profileData, setProfileData] = useState({
+    full_name: "",
+    phone: "",
+    username: "",
   });
 
   const [settings, setSettings] = useState({
@@ -63,6 +73,32 @@ export default function Settings() {
       fetchSettings();
     }
   }, [business]);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchProfile();
+    }
+  }, [user?.id]);
+
+  const fetchProfile = async () => {
+    if (!user?.id) return;
+    
+    setProfileLoading(true);
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("full_name, phone, username")
+      .eq("id", user.id)
+      .single();
+
+    if (data) {
+      setProfileData({
+        full_name: data.full_name || "",
+        phone: data.phone || "",
+        username: data.username || "",
+      });
+    }
+    setProfileLoading(false);
+  };
 
   const fetchSettings = async () => {
     if (!business?.id) return;
@@ -133,6 +169,62 @@ export default function Settings() {
     setLoading(false);
   };
 
+  const handleSaveProfile = async () => {
+    if (!user?.id) return;
+    
+    setLoading(true);
+    
+    // Validate username if provided
+    const usernameTrimmed = profileData.username.trim();
+    if (usernameTrimmed) {
+      const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/;
+      if (!usernamePattern.test(usernameTrimmed)) {
+        toast({ 
+          title: "Invalid username", 
+          description: "Username must be 3-30 characters and only contain letters, numbers, or underscores",
+          variant: "destructive" 
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Check uniqueness (excluding current user)
+      const { data: existing } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("username", usernameTrimmed.toLowerCase())
+        .neq("id", user.id)
+        .maybeSingle();
+
+      if (existing) {
+        toast({ 
+          title: "Username taken", 
+          description: "This username is already in use",
+          variant: "destructive" 
+        });
+        setLoading(false);
+        return;
+      }
+    }
+
+    const { error } = await supabase
+      .from("profiles")
+      .update({
+        full_name: profileData.full_name || null,
+        phone: profileData.phone || null,
+        username: usernameTrimmed ? usernameTrimmed.toLowerCase() : null,
+      })
+      .eq("id", user.id);
+
+    if (error) {
+      toast({ title: "Failed to save", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Profile saved" });
+      fetchProfile();
+    }
+    setLoading(false);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -152,6 +244,10 @@ export default function Settings() {
             <TabsTrigger value="business" className="gap-2">
               <Building2 className="h-4 w-4" />
               Business
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="gap-2">
+              <User className="h-4 w-4" />
+              Profile
             </TabsTrigger>
             <TabsTrigger value="financial" className="gap-2">
               <DollarSign className="h-4 w-4" />
@@ -262,6 +358,65 @@ export default function Settings() {
                     </div>
                   </label>
                 </RadioGroup>
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Profile Settings */}
+          <TabsContent value="profile">
+            <div className="rounded-xl border border-border bg-card p-6 shadow-card">
+              <h3 className="mb-6 text-lg font-semibold text-foreground">
+                Your Profile
+              </h3>
+              {profileLoading ? (
+                <div className="space-y-4">
+                  {[...Array(3)].map((_, i) => (
+                    <Skeleton key={i} className="h-16 w-full" />
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-6 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">Full Name</Label>
+                    <Input
+                      id="fullName"
+                      value={profileData.full_name}
+                      onChange={(e) => setProfileData({ ...profileData, full_name: e.target.value })}
+                      placeholder="Your full name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={profileData.phone}
+                      onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+                      placeholder="+62 8xxx xxxx xxxx"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="username">Username (optional)</Label>
+                    <Input
+                      id="username"
+                      type="text"
+                      value={profileData.username}
+                      onChange={(e) => setProfileData({ ...profileData, username: e.target.value })}
+                      placeholder="username (3-30 chars, letters, numbers, underscore)"
+                      pattern="[a-zA-Z0-9_]{3,30}"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      If set, you can login using this username instead of email.
+                    </p>
+                  </div>
+                </div>
+              )}
+              <div className="mt-6 flex justify-end">
+                <Button variant="glow" onClick={handleSaveProfile} disabled={loading}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <Save className="mr-2 h-4 w-4" />
+                  Save Changes
+                </Button>
               </div>
             </div>
           </TabsContent>

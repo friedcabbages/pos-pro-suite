@@ -54,6 +54,7 @@ serve(async (req) => {
     const bodyText = await req.text();
     const body = bodyText ? JSON.parse(bodyText) : {};
     const deviceId = typeof body?.device_id === "string" ? body.device_id.trim() : "";
+    const deviceName = typeof body?.device_name === "string" ? body.device_name.trim() : "";
     const windowMinutes = typeof body?.window_minutes === "number" ? body.window_minutes : 10;
 
     if (!deviceId) return json({ error: "Missing device_id" }, 400);
@@ -84,15 +85,31 @@ serve(async (req) => {
 
     const maxDevices = limitData as number | null;
 
-    // Upsert this session first (idempotent) so current device counts as active
+    // If device was revoked, reject until it re-registers (client should refresh device_id)
+    const { data: existing, error: existingErr } = await adminClient
+      .from("active_devices")
+      .select("revoked_at")
+      .eq("business_id", businessId)
+      .eq("device_id", deviceId)
+      .maybeSingle();
+    if (existingErr) {
+      console.error("[device-session] active_devices lookup error", existingErr.message);
+      return json({ error: "Failed to load device session" }, 500);
+    }
+    if (existing?.revoked_at) {
+      return json({ allowed: false, reason: "revoked" }, 403);
+    }
+
+    // Upsert this device (idempotent) so current device counts as active
     const now = new Date().toISOString();
     const { error: upsertErr } = await adminClient
-      .from("business_device_sessions")
+      .from("active_devices")
       .upsert(
         {
           business_id: businessId,
           user_id: userId,
           device_id: deviceId,
+          device_name: deviceName || null,
           last_seen: now,
           revoked_at: null,
         },
@@ -116,20 +133,65 @@ serve(async (req) => {
     const current = Number(activeCount ?? 0);
 
     if (maxDevices !== null && current > maxDevices) {
-      console.warn("[device-session] device limit exceeded", { businessId, current, maxDevices });
+      const excess = current - maxDevices;
+      const { data: candidates, error: candidatesErr } = await adminClient
+        .from("active_devices")
+        .select("device_id")
+        .eq("business_id", businessId)
+        .is("revoked_at", null)
+        .neq("device_id", deviceId)
+        .order("last_seen", { ascending: true })
+        .limit(excess);
 
-      // Best-effort log
-      await adminClient.from("business_activity_logs").insert({
-        business_id: businessId,
-        user_id: userId,
-        action: "device_limit_blocked",
-        entity_type: "subscription",
-        entity_id: businessId,
-        description: `Active device limit exceeded (${current}/${maxDevices})`,
-        metadata: { current, maxDevices, deviceId },
+      if (candidatesErr) {
+        console.error("[device-session] prune candidates error", candidatesErr.message);
+        return json({ error: "Failed to resolve device usage" }, 500);
+      }
+
+      if (candidates?.length) {
+        const revokeIds = candidates.map((c) => c.device_id);
+        const { error: revokeErr } = await adminClient
+          .from("active_devices")
+          .update({ revoked_at: now })
+          .in("device_id", revokeIds)
+          .eq("business_id", businessId)
+          .is("revoked_at", null);
+        if (revokeErr) {
+          console.error("[device-session] prune revoke error", revokeErr.message);
+          return json({ error: "Failed to resolve device usage" }, 500);
+        }
+      }
+
+      const { data: refreshedCount, error: refreshErr } = await adminClient.rpc("count_active_devices", {
+        p_business_id: businessId,
+        p_window_minutes: windowMinutes,
       });
+      if (refreshErr) {
+        console.error("[device-session] refresh count error", refreshErr.message);
+        return json({ error: "Failed to check device usage" }, 500);
+      }
 
-      return json({ allowed: false, reason: "device_limit", current, maxDevices }, 403);
+      const refreshed = Number(refreshedCount ?? current);
+      if (refreshed > maxDevices && candidates?.length === 0) {
+        // Always allow current device even if limit is misconfigured.
+        return json({ allowed: true, current: refreshed, maxDevices, overLimit: true });
+      }
+      if (refreshed > maxDevices) {
+        console.warn("[device-session] device limit exceeded", { businessId, current: refreshed, maxDevices });
+
+        // Best-effort log
+        await adminClient.from("business_activity_logs").insert({
+          business_id: businessId,
+          user_id: userId,
+          action: "device_limit_blocked",
+          entity_type: "subscription",
+          entity_id: businessId,
+          description: `Active device limit exceeded (${refreshed}/${maxDevices})`,
+          metadata: { current: refreshed, maxDevices, deviceId },
+        });
+
+        return json({ allowed: false, reason: "device_limit", current: refreshed, maxDevices }, 403);
+      }
     }
 
     return json({ allowed: true, current, maxDevices });

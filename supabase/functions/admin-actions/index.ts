@@ -24,8 +24,20 @@ serve(async (req) => {
       auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    // Read authorization header (same pattern as other working edge functions)
+    const authHeaderLower = req.headers.get("authorization");
+    const authHeaderUpper = req.headers.get("Authorization");
+    const authHeader = authHeaderLower ?? authHeaderUpper;
+    
+    if (!authHeader?.toLowerCase().startsWith("bearer ")) {
+      console.error("[admin-actions] Missing or invalid Authorization header");
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const token = authHeader.split(" ")[1]?.trim();
+    
+    if (!token) {
+      console.error("[admin-actions] Empty token after parsing");
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -33,19 +45,20 @@ serve(async (req) => {
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-
-    const token = authHeader.replace("Bearer ", "");
+    
+    // Validate token using getClaims (same as other working edge functions)
     const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
     
-    if (claimsError || !claimsData?.claims) {
-      console.error("Token validation error:", claimsError?.message);
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.error("[admin-actions] Token validation error:", claimsError?.message || "Unknown error");
       return new Response(JSON.stringify({ error: "Invalid token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const userId = claimsData.claims.sub as string;
+    const userId = String(claimsData.claims.sub);
     const userEmail = claimsData.claims.email as string;
 
     if (!userId) {
+      console.error("[admin-actions] No user ID in token claims");
       return new Response(JSON.stringify({ error: "Invalid token - no user id" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -58,8 +71,24 @@ serve(async (req) => {
     
     const isSuperAdmin = !!superAdminRecord;
     
-    const body = await req.json();
+    // Read body as text first, then parse JSON (like other edge functions)
+    let body: any;
+    try {
+      const bodyText = await req.text();
+      if (!bodyText || bodyText.trim() === "") {
+        return new Response(JSON.stringify({ error: "Empty request body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+      body = JSON.parse(bodyText);
+    } catch (parseError) {
+      console.error("[admin-actions] JSON parse error:", parseError);
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const { action, business_id, filters, payload } = body;
+
+    if (!action || typeof action !== "string") {
+      return new Response(JSON.stringify({ error: "Missing or invalid action" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
     console.log("Admin action:", action, "by user:", userEmail, "super admin:", isSuperAdmin);
 
@@ -129,7 +158,7 @@ serve(async (req) => {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const { data: roles } = await adminClient.from("user_roles").select(`*, business:businesses(name)`).order("created_at", { ascending: false });
         const userIds = roles?.map(r => r.user_id) || [];
-        const { data: profiles } = await adminClient.from("profiles").select("id, full_name, phone, avatar_url").in("id", userIds);
+        const { data: profiles } = await adminClient.from("profiles").select("id, full_name, phone, username, avatar_url").in("id", userIds);
         const { data: authUsers } = await adminClient.auth.admin.listUsers();
         const emailMap = new Map(authUsers?.users?.map(u => [u.id, u.email]) || []);
         const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
@@ -141,7 +170,7 @@ serve(async (req) => {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const { data: roles } = await adminClient.from("user_roles").select("*").eq("business_id", business_id);
         const userIds = roles?.map(r => r.user_id) || [];
-        const { data: profiles } = await adminClient.from("profiles").select("id, full_name, phone").in("id", userIds);
+        const { data: profiles } = await adminClient.from("profiles").select("id, full_name, phone, username").in("id", userIds);
         const { data: authUsers } = await adminClient.auth.admin.listUsers();
         const emailMap = new Map(authUsers?.users?.map(u => [u.id, { email: u.email, banned: (u as any).banned_until !== null }]) || []);
         const profileMap = new Map(profiles?.map(p => [p.id, p]) || []);
@@ -249,6 +278,22 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      case "update_business_type": {
+        if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const { business_type } = payload;
+        const validBusinessTypes = ['retail', 'fnb', 'service', 'venue'];
+        if (!business_type || !validBusinessTypes.includes(business_type)) {
+          return new Response(JSON.stringify({ error: "Invalid business_type. Must be one of: retail, fnb, service, venue" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        const { data: business } = await adminClient.from("businesses").select("business_type").eq("id", business_id).single();
+        if (!business) {
+          return new Response(JSON.stringify({ error: "Business not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        await adminClient.from("businesses").update({ business_type }).eq("id", business_id);
+        await logGlobalAudit('business_type_changed', 'business', business_id, business_id, undefined, { business_type: business.business_type }, { business_type });
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       case "update_user_role": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const { user_id: targetUserId, business_id: targetBizId, new_role } = payload;
@@ -270,10 +315,132 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      case "update_username": {
+        if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        
+        console.log("[update_username] Payload received:", JSON.stringify(payload));
+        
+        if (!payload || typeof payload !== "object") {
+          console.error("[update_username] Invalid payload:", payload);
+          return new Response(JSON.stringify({ error: "Invalid payload" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        const { user_id: targetUserId, username } = payload;
+        
+        console.log("[update_username] Extracted values - user_id:", targetUserId, "username:", username);
+        
+        if (!targetUserId || typeof targetUserId !== "string") {
+          console.error("[update_username] Missing or invalid user_id:", targetUserId);
+          return new Response(JSON.stringify({ error: "Missing or invalid user_id" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        const usernameTrimmed = typeof username === "string" && username.trim() ? username.trim().toLowerCase() : null;
+        
+        if (usernameTrimmed) {
+          const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/;
+          if (!usernamePattern.test(usernameTrimmed)) {
+            return new Response(JSON.stringify({ error: "Username must be 3-30 characters and only contain letters, numbers, or underscores" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+
+          const { data: existing, error: checkError } = await adminClient
+            .from("profiles")
+            .select("id")
+            .eq("username", usernameTrimmed)
+            .neq("id", targetUserId)
+            .maybeSingle();
+
+          if (checkError) {
+            console.error("[update_username] Error checking existing username:", checkError);
+            return new Response(JSON.stringify({ error: "Failed to check username availability" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+
+          if (existing) {
+            return new Response(JSON.stringify({ error: "Username already in use" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        }
+
+        const { data: oldProfile, error: profileError } = await adminClient
+          .from("profiles")
+          .select("username")
+          .eq("id", targetUserId)
+          .maybeSingle();
+        
+        if (profileError) {
+          console.error("[update_username] Error fetching profile:", profileError);
+          return new Response(JSON.stringify({ error: "Failed to fetch user profile" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+
+        const { error: updateError } = await adminClient
+          .from("profiles")
+          .update({ username: usernameTrimmed })
+          .eq("id", targetUserId);
+        
+        if (updateError) {
+          console.error("[update_username] Error updating profile:", updateError);
+          return new Response(JSON.stringify({ error: "Failed to update username" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        if (usernameTrimmed) {
+          const { error: authError } = await adminClient.auth.admin.updateUserById(targetUserId, { 
+            user_metadata: { username: usernameTrimmed } 
+          });
+          
+          if (authError) {
+            console.error("[update_username] Error updating auth metadata:", authError);
+            // Don't fail the whole operation if metadata update fails
+          }
+        }
+        
+        await logGlobalAudit('username_updated', 'user', targetUserId, undefined, targetUserId, { username: oldProfile?.username || null }, { username: usernameTrimmed });
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       case "send_password_reset": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const { email } = payload;
         await adminClient.auth.resetPasswordForEmail(email);
+        return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      case "update_own_password": {
+        if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        
+        const { current_password, new_password } = payload || {};
+        
+        if (!current_password || !new_password) {
+          return new Response(JSON.stringify({ error: "Missing required fields: current_password and new_password" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        if (new_password.length < 6) {
+          return new Response(JSON.stringify({ error: "New password must be at least 6 characters" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        // Verify current password by attempting to sign in
+        const verifyClient = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        });
+        
+        const { error: signInError } = await verifyClient.auth.signInWithPassword({
+          email: userEmail,
+          password: current_password,
+        });
+        
+        if (signInError) {
+          // Return 400 instead of 401 to avoid confusion with authentication errors
+          return new Response(JSON.stringify({ error: "Current password is incorrect" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        // Update password using admin client
+        const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+          password: new_password,
+        });
+        
+        if (updateError) {
+          console.error("[update_own_password] Password update error:", updateError.message);
+          return new Response(JSON.stringify({ error: "Failed to update password" }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        
+        await logGlobalAudit('password_updated', 'user', userId, undefined, userId, {}, {});
         return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
@@ -353,6 +520,13 @@ serve(async (req) => {
         return new Response(JSON.stringify({ success: true, owner_id: business.owner_id }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
 
+      case "get_business_for_impersonation": {
+        if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        const { data: business } = await adminClient.from("businesses").select("id, name, currency, tax_rate, logo_url, address, phone, email, status, trial_end_at, business_type, owner_id").eq("id", business_id).single();
+        if (!business) return new Response(JSON.stringify({ error: "Business not found" }), { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        return new Response(JSON.stringify({ business }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       case "get_system_stats": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const [businessesResult, usersResult, salesResult, statusCounts] = await Promise.all([
@@ -368,18 +542,46 @@ serve(async (req) => {
 
       case "create_business_with_owner": {
         if (!isSuperAdmin) return new Response(JSON.stringify({ error: "Super admin access required" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        const { business_name, owner_email, owner_password, owner_name, currency = "USD" } = payload || {};
+        const { business_name, owner_email, owner_password, owner_name, owner_username, currency = "USD", business_type = "retail" } = payload || {};
         if (!business_name || !owner_email || !owner_password) return new Response(JSON.stringify({ error: "Missing required fields" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        const { data: authData, error: authError } = await adminClient.auth.admin.createUser({ email: owner_email, password: owner_password, email_confirm: true, user_metadata: { full_name: owner_name || owner_email.split('@')[0] } });
+        
+        // Validate business_type
+        const validBusinessTypes = ['retail', 'fnb', 'service', 'venue'];
+        const businessType = typeof business_type === "string" && validBusinessTypes.includes(business_type) ? business_type : "retail";
+        
+        const ownerUsernameLower = typeof owner_username === "string" && owner_username.trim() ? owner_username.trim().toLowerCase() : null;
+        
+        // Validate username if provided
+        if (ownerUsernameLower) {
+          const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/;
+          if (!usernamePattern.test(ownerUsernameLower)) {
+            return new Response(JSON.stringify({ error: "Username must be 3-30 characters and only contain letters, numbers, or underscores" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+
+          // Check username uniqueness
+          const { data: existingUsername } = await adminClient
+            .from("profiles")
+            .select("id")
+            .eq("username", ownerUsernameLower)
+            .maybeSingle();
+
+          if (existingUsername) {
+            return new Response(JSON.stringify({ error: "Username already in use" }), { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+        }
+        
+        const userMetadata: Record<string, string> = { full_name: owner_name || owner_email.split('@')[0] };
+        if (ownerUsernameLower) userMetadata.username = ownerUsernameLower;
+        const { data: authData, error: authError } = await adminClient.auth.admin.createUser({ email: owner_email, password: owner_password, email_confirm: true, user_metadata });
         if (authError) return new Response(JSON.stringify({ error: authError.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const newUserId = authData.user?.id;
         const trialEndAt = new Date(); trialEndAt.setDate(trialEndAt.getDate() + 7);
-        const { data: businessData, error: businessError } = await adminClient.from("businesses").insert({ name: business_name, currency, owner_id: newUserId, status: 'trial', trial_end_at: trialEndAt.toISOString() }).select().single();
+        const { data: businessData, error: businessError } = await adminClient.from("businesses").insert({ name: business_name, currency, owner_id: newUserId, status: 'trial', trial_end_at: trialEndAt.toISOString(), business_type: businessType }).select().single();
         if (businessError) { await adminClient.auth.admin.deleteUser(newUserId!); return new Response(JSON.stringify({ error: businessError.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }); }
         const { data: branchData } = await adminClient.from("branches").insert({ business_id: businessData.id, name: "Main Branch" }).select().single();
         if (branchData) await adminClient.from("warehouses").insert({ branch_id: branchData.id, name: "Main Warehouse" });
         await adminClient.from("user_roles").insert({ user_id: newUserId, business_id: businessData.id, role: "owner" });
-        await adminClient.from("profiles").upsert({ id: newUserId, full_name: owner_name || owner_email.split('@')[0], business_id: businessData.id, branch_id: branchData?.id }, { onConflict: "id" });
+        await adminClient.from("profiles").upsert({ id: newUserId, full_name: owner_name || owner_email.split('@')[0], username: ownerUsernameLower, business_id: businessData.id, branch_id: branchData?.id }, { onConflict: "id" });
         await adminClient.from("settings").insert({ business_id: businessData.id });
         await logGlobalAudit('business_created', 'business', businessData.id, businessData.id, newUserId, undefined, { business_name, owner_email });
         return new Response(JSON.stringify({ success: true, business: businessData }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });

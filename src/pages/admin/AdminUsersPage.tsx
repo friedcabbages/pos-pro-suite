@@ -139,6 +139,7 @@ export default function AdminUsersPage() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
+                <TableHead>Username</TableHead>
                 <TableHead>Business</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Phone</TableHead>
@@ -148,13 +149,13 @@ export default function AdminUsersPage() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8">
+                  <TableCell colSpan={7} className="text-center py-8">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : filteredUsers?.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     No users found
                   </TableCell>
                 </TableRow>
@@ -165,6 +166,7 @@ export default function AdminUsersPage() {
                       {user.profile?.full_name || 'Unknown'}
                     </TableCell>
                     <TableCell>{user.email || '-'}</TableCell>
+                    <TableCell>{user.profile?.username || '-'}</TableCell>
                     <TableCell>{user.business?.name || '-'}</TableCell>
                     <TableCell>
                       <Badge variant={getRoleBadgeVariant(user.role)}>

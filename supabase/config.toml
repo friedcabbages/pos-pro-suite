@@ -19,3 +19,20 @@ verify_jwt = false
 [functions.device-session]
 verify_jwt = false
 
+[functions.session-guard]
+verify_jwt = false
+
+[functions.user-sessions]
+verify_jwt = true
+
+[functions.public-menu]
+verify_jwt = false
+
+[functions.table-order-create]
+verify_jwt = false
+
+[functions.online-order-create]
+verify_jwt = false
+
+[functions.order-actions]
+verify_jwt = false

@@ -28,6 +28,13 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Building2, Search, MoreHorizontal, Eye, Ban, CheckCircle, UserCog, Users, DollarSign, Plus, Clock, XCircle, Play, ExternalLink } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { useAdminBusinesses, useAdminAction, useSystemStats, useCreateBusinessWithOwner } from '@/hooks/useSuperAdmin';
@@ -63,7 +70,9 @@ export default function BusinessesPage() {
     owner_email: '',
     owner_password: '',
     owner_name: '',
+    owner_username: '',
     currency: 'USD',
+    business_type: 'retail' as 'retail' | 'fnb' | 'service' | 'venue',
   });
 
   const { data: businesses, isLoading } = useAdminBusinesses();
@@ -111,7 +120,7 @@ export default function BusinessesPage() {
     createBusiness.mutate(createForm, {
       onSuccess: () => {
         setDialogAction(null);
-        setCreateForm({ business_name: '', owner_email: '', owner_password: '', owner_name: '', currency: 'USD' });
+        setCreateForm({ business_name: '', owner_email: '', owner_password: '', owner_name: '', owner_username: '', currency: 'USD', business_type: 'retail' });
       },
     });
   };
@@ -283,6 +292,36 @@ export default function BusinessesPage() {
             <div className="space-y-2">
               <Label>Owner Email *</Label>
               <Input type="email" value={createForm.owner_email} onChange={(e) => setCreateForm(p => ({ ...p, owner_email: e.target.value }))} placeholder="owner@example.com" />
+            </div>
+            <div className="space-y-2">
+              <Label>Owner Username (optional)</Label>
+              <Input 
+                type="text" 
+                value={createForm.owner_username} 
+                onChange={(e) => setCreateForm(p => ({ ...p, owner_username: e.target.value }))} 
+                placeholder="username (3-30 chars, letters, numbers, underscore)"
+                pattern="[a-zA-Z0-9_]{3,30}"
+              />
+              <p className="text-xs text-muted-foreground">
+                If set, owner can login using this username instead of email.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>Business Type *</Label>
+              <Select value={createForm.business_type} onValueChange={(value) => setCreateForm(p => ({ ...p, business_type: value as 'retail' | 'fnb' | 'service' | 'venue' }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="retail">Retail</SelectItem>
+                  <SelectItem value="fnb">Food & Beverage</SelectItem>
+                  <SelectItem value="service">Service (Barbershop, etc.)</SelectItem>
+                  <SelectItem value="venue">Venue (Badminton/Futsal/Rental)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Select the type of business. This determines which POS module the user will access.
+              </p>
             </div>
             <div className="space-y-2">
               <Label>Password *</Label>

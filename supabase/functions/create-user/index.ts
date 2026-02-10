@@ -107,8 +107,10 @@ serve(async (req) => {
     const full_name = typeof body?.full_name === "string" ? body.full_name.trim() : null;
     const phone = typeof body?.phone === "string" && body.phone.trim() !== "" ? body.phone.trim() : null;
     const branch_id = typeof body?.branch_id === "string" && body.branch_id.trim() !== "" ? body.branch_id.trim() : null;
+    const usernameRaw = typeof body?.username === "string" ? body.username.trim() : null;
+    const username = usernameRaw ? usernameRaw.toLowerCase() : null;
 
-    console.log("Creating user with params:", { email, role, business_id, branch_id, phone });
+    console.log("Creating user with params:", { email, role, business_id, branch_id, phone, username });
 
     // Validate required fields
     if (!email || !password || !role || !business_id) {
@@ -116,6 +118,40 @@ serve(async (req) => {
         JSON.stringify({ error: "Missing required fields: email, password, role, business_id" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // Validate username if provided
+    const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/;
+    if (username && !usernamePattern.test(usernameRaw ?? "")) {
+      return new Response(JSON.stringify({ error: "Username must be 3-30 characters and only contain letters, numbers, or underscores" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Check username uniqueness if provided
+    if (username) {
+      const { data: existingUsername, error: existingUsernameError } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("username", username)
+        .limit(1)
+        .maybeSingle();
+
+      if (existingUsernameError) {
+        console.error("Username lookup error:", existingUsernameError.message);
+        return new Response(JSON.stringify({ error: "Failed to validate username" }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (existingUsername) {
+        return new Response(JSON.stringify({ error: "Username already in use" }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Validate role
@@ -208,12 +244,17 @@ serve(async (req) => {
 
     console.log("Permission check passed, creating auth user...");
 
+    // Prepare user metadata
+    const userMetadata: Record<string, string> = {};
+    if (full_name) userMetadata.full_name = full_name;
+    if (username) userMetadata.username = username;
+
     // Create the user using admin API (service role)
     const { data: created, error: createError } = await adminClient.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      ...(full_name ? { user_metadata: { full_name } } : {}),
+      ...(Object.keys(userMetadata).length ? { user_metadata: userMetadata } : {}),
     });
 
     if (createError) {
@@ -264,6 +305,7 @@ serve(async (req) => {
         phone,
         business_id,
         branch_id,
+        username,
       },
       { onConflict: "id" }
     );

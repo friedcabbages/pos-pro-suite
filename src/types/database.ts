@@ -2,6 +2,7 @@ export type AppRole = 'owner' | 'admin' | 'cashier';
 export type POStatus = 'draft' | 'ordered' | 'received' | 'cancelled';
 export type PaymentMethod = 'cash' | 'transfer' | 'qris' | 'card' | 'other';
 export type InventoryAction = 'stock_in' | 'stock_out' | 'adjustment' | 'transfer' | 'po_receive' | 'sale';
+export type BusinessType = 'retail' | 'fnb' | 'service' | 'venue';
 
 export interface Business {
   id: string;
@@ -12,6 +13,7 @@ export interface Business {
   address: string | null;
   phone: string | null;
   email: string | null;
+  business_type: BusinessType;
   created_at: string;
   updated_at: string;
 }
@@ -34,6 +36,7 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   phone: string | null;
+  username: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -71,6 +74,11 @@ export interface Product {
   image_url: string | null;
   is_active: boolean;
   track_expiry: boolean;
+  // F&B fields (optional, added via migration)
+  is_menu_item?: boolean;
+  is_available?: boolean;
+  prep_station?: FnbPrepStation | null;
+  sort_order?: number;
   created_at: string;
   updated_at: string;
   // Joined fields
@@ -300,4 +308,181 @@ export interface SupplierPerformance {
   total_orders: number;
   completed_orders: number;
   total_value: number;
+}
+
+export interface FnbDailySales {
+  business_id: string;
+  branch_id: string;
+  sale_date: string;
+  total_transactions: number;
+  total_revenue: number;
+  total_discounts: number;
+  total_tax: number;
+  total_cogs: number;
+  total_profit: number;
+}
+
+export interface FnbTopItem {
+  product_id: string;
+  business_id: string;
+  product_name: string;
+  order_count: number;
+  total_quantity_sold: number;
+  total_revenue: number;
+  avg_price: number;
+}
+
+// F&B Types
+export type FnbTableStatus = 'available' | 'occupied' | 'reserved' | 'cleaning' | 'inactive';
+export type FnbOrderType = 'dine_in' | 'takeaway' | 'delivery';
+export type FnbOrderStatus = 'pending' | 'accepted' | 'rejected' | 'preparing' | 'ready' | 'served' | 'completed' | 'cancelled';
+export type FnbOrderItemStatus = 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
+export type FnbBillStatus = 'open' | 'closed' | 'voided';
+export type FnbOrderSource = 'qr' | 'online' | 'staff';
+export type FnbPrepStation = 'kitchen' | 'bar';
+
+export interface FnbFloorPlan {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  name: string;
+  canvas_width: number;
+  canvas_height: number;
+  grid_size: number;
+  layout_version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbTable {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  floor_plan_id: string | null;
+  name: string;
+  capacity: number;
+  status: FnbTableStatus;
+  pos_x: number;
+  pos_y: number;
+  width: number;
+  height: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbTableQrToken {
+  id: string;
+  table_id: string;
+  token_hash: string;
+  last_rotated_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export interface FnbModifierGroup {
+  id: string;
+  business_id: string;
+  name: string;
+  is_required: boolean;
+  min_select: number;
+  max_select: number;
+  is_multi: boolean;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbModifier {
+  id: string;
+  group_id: string;
+  name: string;
+  price_delta: number;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbProductModifierGroup {
+  id: string;
+  product_id: string;
+  group_id: string;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface FnbOrder {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  table_id: string | null;
+  order_type: FnbOrderType;
+  status: FnbOrderStatus;
+  source: FnbOrderSource;
+  customer_name: string | null;
+  phone: string | null;
+  notes: string | null;
+  opened_at: string;
+  accepted_at: string | null;
+  completed_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbOrderItem {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  price: number;
+  notes: string | null;
+  station: FnbPrepStation | null;
+  status: FnbOrderItemStatus;
+  modifiers_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbBill {
+  id: string;
+  business_id: string;
+  branch_id: string;
+  table_id: string | null;
+  status: FnbBillStatus;
+  opened_by: string | null;
+  closed_by: string | null;
+  opened_at: string;
+  closed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbBillOrder {
+  id: string;
+  bill_id: string;
+  order_id: string;
+  created_at: string;
+}
+
+export interface FnbRecipe {
+  id: string;
+  business_id: string;
+  product_id: string;
+  yield_quantity: number;
+  unit: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FnbRecipeItem {
+  id: string;
+  recipe_id: string;
+  ingredient_product_id: string;
+  quantity: number;
+  unit: string;
+  created_at: string;
 }

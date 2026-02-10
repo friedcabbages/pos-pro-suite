@@ -1,13 +1,11 @@
 import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
-import { useDeviceSession } from "@/hooks/useDeviceSession";
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
-  useDeviceSession();
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />

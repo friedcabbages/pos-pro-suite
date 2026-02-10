@@ -15,6 +15,9 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import POS from "./pages/POS";
+import Fnb from "./pages/Fnb";
+import Service from "./pages/Service";
+import Venue from "./pages/Venue";
 import Products from "./pages/Products";
 import Inventory from "./pages/Inventory";
 import Transactions from "./pages/Transactions";
@@ -36,7 +39,20 @@ import NoAccess from "./pages/NoAccess";
 import SubscriptionRequired from "./pages/SubscriptionRequired";
 import AccountSuspended from "./pages/AccountSuspended";
 import AccessDenied from "./pages/AccessDenied";
-import TestingHub from "./pages/TestingHub";
+
+// F&B pages
+import FnbDashboard from "./pages/fnb/FnbDashboard";
+import FnbFloorPlan from "./pages/fnb/FnbFloorPlan";
+import FnbTables from "./pages/fnb/FnbTables";
+import FnbOrders from "./pages/fnb/FnbOrders";
+import FnbKDS from "./pages/fnb/FnbKDS";
+import FnbCashier from "./pages/fnb/FnbCashier";
+import FnbMenu from "./pages/fnb/FnbMenu";
+import FnbInventory from "./pages/fnb/FnbInventory";
+import FnbReports from "./pages/fnb/FnbReports";
+
+// Public ordering pages
+import TableOrderPage from "./pages/order/TableOrderPage";
 import SuperAdminLayout from "./pages/admin/SuperAdminLayout";
 import MissionControlDashboard from "./pages/admin/MissionControlDashboard";
 import BusinessesPage from "./pages/admin/BusinessesPage";
@@ -68,8 +84,8 @@ const App = () => (
                 <UpgradeModalProvider>
                 <ImpersonationBanner />
                 <Routes>
-                {/* Testing Hub - Development Entry Point */}
-                <Route path="/" element={<TestingHub />} />
+                {/* Root redirect to auth */}
+                <Route path="/" element={<Navigate to="/auth" replace />} />
                 
                 {/* Marketing Website */}
                 <Route path="/marketing" element={<MarketingLayout />}>
@@ -97,70 +113,81 @@ const App = () => (
                 <Route path="/account-suspended" element={<AccountSuspended />} />
                 <Route path="/access-denied" element={<AccessDenied />} />
 
-                {/* Client POS Application */}
+                {/* Public Ordering (customer-facing, no auth required) */}
+                <Route path="/order/table/:token" element={<TableOrderPage />} />
+
+                {/* Global routes (not business-type-specific) */}
                 <Route path="/app" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-                <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
-                <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
-                <Route path="/categories" element={<AdminRoute><Categories /></AdminRoute>} />
-                <Route path="/inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
-                <Route path="/warehouses" element={<AdminRoute><Warehouses /></AdminRoute>} />
-                <Route path="/transactions" element={<AdminRoute><Transactions /></AdminRoute>} />
-                {/* /expenses is feature-gated below */}
-                <Route path="/reports" element={<AdminRoute><Reports /></AdminRoute>} />
+                <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
+                <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
+                <Route path="/subscription" element={<OwnerRoute><Subscription /></OwnerRoute>} />
+                <Route path="/activity" element={<AdminRoute><ActivityHistory /></AdminRoute>} />
+
+                {/* Retail routes (standalone) */}
+                <Route path="/retail/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+                <Route path="/retail/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
+                <Route path="/retail/categories" element={<AdminRoute><Categories /></AdminRoute>} />
+                <Route path="/retail/inventory" element={<AdminRoute><Inventory /></AdminRoute>} />
+                <Route path="/retail/warehouses" element={<AdminRoute><Warehouses /></AdminRoute>} />
+                <Route path="/retail/transactions" element={<AdminRoute><Transactions /></AdminRoute>} />
+                <Route path="/retail/reports" element={<AdminRoute><Reports /></AdminRoute>} />
                 <Route
-                  path="/reports-advanced"
+                  path="/retail/reports-advanced"
                   element={
                     <AdminRoute>
-                      <FeatureRoute
-                        featureKey="reports_advanced"
-                        fallbackPath="/reports"
-                      >
+                      <FeatureRoute featureKey="reports_advanced" fallbackPath="/retail/reports">
                         <ReportsAdvanced />
                       </FeatureRoute>
                     </AdminRoute>
                   }
                 />
-                <Route path="/suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
+                <Route path="/retail/suppliers" element={<AdminRoute><Suppliers /></AdminRoute>} />
                 <Route
-                  path="/purchase-orders"
+                  path="/retail/purchase-orders"
                   element={
                     <AdminRoute>
-                      <FeatureRoute
-                        featureKey="purchase_orders"
-                      >
+                      <FeatureRoute featureKey="purchase_orders">
                         <PurchaseOrders />
                       </FeatureRoute>
                     </AdminRoute>
                   }
                 />
                 <Route
-                  path="/expenses"
+                  path="/retail/expenses"
                   element={
                     <AdminRoute>
-                      <FeatureRoute
-                        featureKey="expenses"
-                      >
+                      <FeatureRoute featureKey="expenses">
                         <Expenses />
                       </FeatureRoute>
                     </AdminRoute>
                   }
                 />
                 <Route
-                  path="/audit-logs"
+                  path="/retail/audit-logs"
                   element={
                     <AdminRoute>
-                      <FeatureRoute
-                        featureKey="audit_logs_full"
-                      >
+                      <FeatureRoute featureKey="audit_logs_full">
                         <AuditLogs />
                       </FeatureRoute>
                     </AdminRoute>
                   }
                 />
-                <Route path="/users" element={<OwnerRoute><Users /></OwnerRoute>} />
-                <Route path="/settings" element={<OwnerRoute><Settings /></OwnerRoute>} />
-                <Route path="/subscription" element={<OwnerRoute><Subscription /></OwnerRoute>} />
-                <Route path="/activity" element={<AdminRoute><ActivityHistory /></AdminRoute>} />
+
+                {/* F&B routes (standalone) */}
+                <Route path="/fnb" element={<ProtectedRoute><Navigate to="/fnb/dashboard" replace /></ProtectedRoute>} />
+                <Route path="/fnb/dashboard" element={<ProtectedRoute><FnbDashboard /></ProtectedRoute>} />
+                <Route path="/fnb/floor-plan" element={<AdminRoute><FnbFloorPlan /></AdminRoute>} />
+                <Route path="/fnb/tables" element={<AdminRoute><FnbTables /></AdminRoute>} />
+                <Route path="/fnb/orders" element={<ProtectedRoute><FnbOrders /></ProtectedRoute>} />
+                <Route path="/fnb/kds" element={<ProtectedRoute><FnbKDS /></ProtectedRoute>} />
+                <Route path="/fnb/cashier" element={<ProtectedRoute><FnbCashier /></ProtectedRoute>} />
+                <Route path="/fnb/menu" element={<AdminRoute><FnbMenu /></AdminRoute>} />
+                <Route path="/fnb/inventory" element={<AdminRoute><FnbInventory /></AdminRoute>} />
+                <Route path="/fnb/reports" element={<AdminRoute><FnbReports /></AdminRoute>} />
+
+                {/* Service & Venue routes (placeholder) */}
+                <Route path="/service" element={<ProtectedRoute><Service /></ProtectedRoute>} />
+                <Route path="/venue" element={<ProtectedRoute><Venue /></ProtectedRoute>} />
                 
                 {/* 404 - Catch all */}
                 <Route path="*" element={<NotFound />} />

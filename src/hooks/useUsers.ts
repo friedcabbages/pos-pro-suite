@@ -11,6 +11,7 @@ interface UserWithRole {
   profile?: {
     full_name: string | null;
     phone: string | null;
+    username: string | null;
   };
   branch?: {
     name: string;
@@ -22,6 +23,7 @@ interface CreateUserInput {
   password: string;
   full_name: string;
   phone?: string;
+  username?: string;
   role: 'admin' | 'cashier';
   branch_id?: string;
 }
@@ -47,7 +49,7 @@ export function useUsers() {
       const userIds = rolesData.map((u) => u.user_id);
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('id, full_name, phone')
+        .select('id, full_name, phone, username')
         .in('id', userIds);
 
       if (profilesError) console.error('Error fetching profiles:', profilesError);
@@ -78,7 +80,7 @@ export function useUsers() {
         user_id: role.user_id,
         role: role.role as 'owner' | 'admin' | 'cashier',
         branch_id: role.branch_id,
-        profile: profilesMap.get(role.user_id) || { full_name: null, phone: null },
+        profile: profilesMap.get(role.user_id) || { full_name: null, phone: null, username: null },
         branch: role.branch_id ? branchesMap.get(role.branch_id) : undefined,
       }));
 
@@ -102,6 +104,7 @@ export function useCreateUser() {
           password: input.password,
           full_name: input.full_name,
           phone: input.phone || null,
+          username: input.username || null,
           role: input.role,
           business_id: business.id,
           branch_id: input.branch_id || null,

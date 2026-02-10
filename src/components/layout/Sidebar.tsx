@@ -24,6 +24,12 @@ import {
   FileText,
   Tag,
   Crown,
+  UtensilsCrossed,
+  LayoutGrid,
+  Table,
+  ShoppingBag,
+  ChefHat,
+  BarChart3,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -36,30 +42,64 @@ type NavItem = {
   featureKey?: PlanFeatureKey;
 };
 
-const navigation: NavItem[] = [
-  { name: "Dashboard", href: "/app", icon: LayoutDashboard },
-  { name: "POS / Cashier", href: "/pos", icon: ShoppingCart },
-  { name: "Products", href: "/products", icon: Package },
-  { name: "Categories", href: "/categories", icon: Tag, adminOnly: true },
-  { name: "Inventory", href: "/inventory", icon: Boxes, adminOnly: true },
-  { name: "Suppliers", href: "/suppliers", icon: Truck, adminOnly: true },
-  {
-    name: "Purchase Orders",
-    href: "/purchase-orders",
-    icon: ClipboardList,
-    adminOnly: true,
-    featureKey: "purchase_orders",
-  },
-  { name: "Warehouses", href: "/warehouses", icon: Warehouse, adminOnly: true },
-  { name: "Transactions", href: "/transactions", icon: Receipt, adminOnly: true },
-  { name: "Expenses", href: "/expenses", icon: DollarSign, adminOnly: true, featureKey: "expenses" },
-  { name: "Reports", href: "/reports", icon: TrendingUp, adminOnly: true },
-  { name: "Audit Logs", href: "/audit-logs", icon: FileText, adminOnly: true, featureKey: "audit_logs_full" },
-  { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
-  { name: "Users", href: "/users", icon: Users, ownerOnly: true },
-  { name: "Settings", href: "/settings", icon: Settings, ownerOnly: true },
-  { name: "Subscription", href: "/subscription", icon: Crown, ownerOnly: true },
-];
+// Navigation items per business type
+const getNavigationForBusinessType = (businessType: string): NavItem[] => {
+  const globalNav: NavItem[] = [
+    { name: "Dashboard", href: "/app", icon: LayoutDashboard },
+    { name: "Users", href: "/users", icon: Users, ownerOnly: true },
+    { name: "Settings", href: "/settings", icon: Settings, ownerOnly: true },
+    { name: "Subscription", href: "/subscription", icon: Crown, ownerOnly: true },
+  ];
+
+  switch (businessType) {
+    case "retail":
+      return [
+        ...globalNav,
+        { name: "POS / Cashier", href: "/retail/pos", icon: ShoppingCart },
+        { name: "Products", href: "/retail/products", icon: Package },
+        { name: "Categories", href: "/retail/categories", icon: Tag, adminOnly: true },
+        { name: "Inventory", href: "/retail/inventory", icon: Boxes, adminOnly: true },
+        { name: "Suppliers", href: "/retail/suppliers", icon: Truck, adminOnly: true },
+        {
+          name: "Purchase Orders",
+          href: "/retail/purchase-orders",
+          icon: ClipboardList,
+          adminOnly: true,
+          featureKey: "purchase_orders",
+        },
+        { name: "Warehouses", href: "/retail/warehouses", icon: Warehouse, adminOnly: true },
+        { name: "Transactions", href: "/retail/transactions", icon: Receipt, adminOnly: true },
+        { name: "Expenses", href: "/retail/expenses", icon: DollarSign, adminOnly: true, featureKey: "expenses" },
+        { name: "Reports", href: "/retail/reports", icon: TrendingUp, adminOnly: true },
+        {
+          name: "Audit Logs",
+          href: "/retail/audit-logs",
+          icon: FileText,
+          adminOnly: true,
+          featureKey: "audit_logs_full",
+        },
+        { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
+      ];
+
+    case "fnb":
+      return [
+        ...globalNav,
+        { name: "F&B Dashboard", href: "/fnb/dashboard", icon: UtensilsCrossed },
+        { name: "Floor Plan", href: "/fnb/floor-plan", icon: LayoutGrid, adminOnly: true },
+        { name: "Tables & QR", href: "/fnb/tables", icon: Table, adminOnly: true },
+        { name: "Order Queue", href: "/fnb/orders", icon: ShoppingBag },
+        { name: "Kitchen Display", href: "/fnb/kds", icon: ChefHat },
+        { name: "Cashier", href: "/fnb/cashier", icon: Receipt },
+        { name: "Menu", href: "/fnb/menu", icon: Package, adminOnly: true },
+        { name: "Inventory (BOM)", href: "/fnb/inventory", icon: Boxes, adminOnly: true },
+        { name: "Reports", href: "/fnb/reports", icon: BarChart3, adminOnly: true },
+        { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
+      ];
+
+    default:
+      return globalNav;
+  }
+};
 
 export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
@@ -67,20 +107,23 @@ export function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
-  const { clearBusiness, userRole, isAdmin, isOwner } = useBusiness();
+  const { clearBusiness, userRole, isAdmin, isOwner, business } = useBusiness();
   const plan = usePlanAccess();
 
-  const handleLogout = async () => {
+  const handleLogout = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     setLoggingOut(true);
     try {
-      clearBusiness();
+      // signOut already handles redirect to /auth immediately
+      // Don't call clearBusiness() as it might trigger re-renders that cause redirects
       await signOut();
-      navigate("/auth", { replace: true });
     } catch (error) {
       console.error('[Sidebar] Logout error:', error);
-    } finally {
-      setLoggingOut(false);
+      // Fallback redirect if signOut fails
+      window.location.href = "/auth";
     }
+    // Don't set loggingOut to false - redirect already happened
   };
 
   // Get user initials
@@ -88,6 +131,11 @@ export function Sidebar() {
     const email = user?.email || "";
     return email.substring(0, 2).toUpperCase();
   };
+
+  // Get navigation based on business type
+  const navigation = business?.business_type
+    ? getNavigationForBusinessType(business.business_type)
+    : [];
 
   // Filter navigation based on user role
   const filteredNavigation = navigation.filter((item) => {

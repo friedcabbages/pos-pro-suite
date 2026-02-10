@@ -14,6 +14,7 @@ interface Business {
   owner_id: string | null;
   status: BusinessStatus;
   trial_end_at: string | null;
+  business_type?: 'retail' | 'fnb' | 'service' | 'venue';
   user_count?: number;
   owner?: {
     full_name: string | null;
@@ -31,6 +32,7 @@ interface AdminUser {
   profile?: {
     full_name: string | null;
     phone: string | null;
+    username: string | null;
     avatar_url?: string | null;
   };
   business?: {
@@ -76,7 +78,9 @@ interface CreateBusinessPayload {
   owner_email: string;
   owner_password: string;
   owner_name?: string;
+  owner_username?: string;
   currency?: string;
+  business_type?: 'retail' | 'fnb' | 'service' | 'venue';
 }
 
 // Check if current user is super admin

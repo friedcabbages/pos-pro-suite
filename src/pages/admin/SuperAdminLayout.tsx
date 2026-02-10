@@ -44,6 +44,7 @@ export default function SuperAdminLayout() {
   const { clearBusiness } = useBusiness();
   const [accessDeniedLogged, setAccessDeniedLogged] = useState(false);
 
+
   // Log access denied attempts for security auditing
   useEffect(() => {
     if (isFetched && !checkingAdmin && !isSuperAdmin && user && !accessDeniedLogged) {
@@ -65,17 +66,20 @@ export default function SuperAdminLayout() {
     }
   }, [isFetched, checkingAdmin, isSuperAdmin, user, location.pathname, accessDeniedLogged]);
 
-  const handleLogout = async () => {
+  const handleLogout = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     setLoggingOut(true);
     try {
-      clearBusiness();
+      // signOut already handles redirect to /auth immediately
+      // Don't call clearBusiness() as it might trigger re-renders that cause redirects
       await signOut();
-      navigate("/auth", { replace: true });
     } catch (error) {
       console.error('[SuperAdminLayout] Logout error:', error);
-    } finally {
-      setLoggingOut(false);
+      // Fallback redirect if signOut fails
+      window.location.href = "/auth";
     }
+    // Don't set loggingOut to false - redirect already happened
   };
 
   const navItems = [
@@ -92,6 +96,14 @@ export default function SuperAdminLayout() {
     }
     return location.pathname.startsWith(path);
   };
+
+  const logoutInProgress = (() => {
+    try {
+      return localStorage.getItem("logout_in_progress") === "1";
+    } catch {
+      return false;
+    }
+  })();
 
   // SECURITY: Wait for auth to initialize - show nothing
   if (!authInitialized || authLoading) {

@@ -14,6 +14,40 @@ function getOrCreateDeviceId() {
   return id;
 }
 
+function getOrCreateDeviceName() {
+  const key = "velopos_device_name";
+  const existing = localStorage.getItem(key);
+  if (existing) return existing;
+
+  const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
+  const platform =
+    /Windows/i.test(ua)
+      ? "Windows"
+      : /Macintosh/i.test(ua)
+        ? "Mac"
+        : /Android/i.test(ua)
+          ? "Android"
+          : /iPhone/i.test(ua)
+            ? "iPhone"
+            : /iPad/i.test(ua)
+              ? "iPad"
+              : "Unknown";
+  const browser =
+    /Edg/i.test(ua)
+      ? "Edge"
+      : /Chrome/i.test(ua)
+        ? "Chrome"
+        : /Safari/i.test(ua)
+          ? "Safari"
+          : /Firefox/i.test(ua)
+            ? "Firefox"
+            : "Browser";
+
+  const label = `${platform} • ${browser}`;
+  localStorage.setItem(key, label);
+  return label;
+}
+
 export function useDeviceSession() {
   const { business } = useBusiness();
   const plan = usePlanAccess();
@@ -30,9 +64,21 @@ export function useDeviceSession() {
     }
   }, []);
 
+  const deviceName = useMemo(() => {
+    try {
+      return getOrCreateDeviceName();
+    } catch {
+      return "";
+    }
+  }, []);
+
   useEffect(() => {
     if (!business?.id) return;
     if (!deviceId) return;
+    if (!plan.isPlanReady) {
+      setBlocked(false);
+      return;
+    }
 
     let cancelled = false;
 
@@ -44,11 +90,23 @@ export function useDeviceSession() {
       }
 
       const { data, error } = await supabase.functions.invoke("device-session", {
-        body: { device_id: deviceId, window_minutes: 10 },
+        body: { device_id: deviceId, device_name: deviceName, window_minutes: 10 },
       });
 
       const allowed = !error && data?.allowed === true;
       if (cancelled) return;
+
+      if (data?.reason === "revoked") {
+        try {
+          localStorage.removeItem("velopos_device_id");
+          localStorage.removeItem("velopos_device_name");
+        } catch {
+          // ignore
+        }
+        await supabase.auth.signOut();
+        window.location.assign("/auth");
+        return;
+      }
 
       if (!allowed) {
         setBlocked(true);
@@ -78,7 +136,7 @@ export function useDeviceSession() {
       window.removeEventListener("online", onOnline);
       if (timerRef.current) window.clearInterval(timerRef.current);
     };
-  }, [business?.id, deviceId, plan.planName, upgrade]);
+  }, [business?.id, deviceId, deviceName, plan.planName, plan.isPlanReady, upgrade]);
 
   return { blocked };
 }

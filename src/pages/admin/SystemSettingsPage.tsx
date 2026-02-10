@@ -53,6 +53,7 @@ import {
   FileText
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
+import { toast } from 'sonner';
 import { 
   useSystemSettings, 
   useBroadcasts, 
@@ -60,9 +61,14 @@ import {
   useCreateBroadcast,
   useToggleBroadcast,
   useGlobalAuditLogs,
+  useUpdateUsername,
+  useUpdateOwnPassword,
   Broadcast
 } from '@/hooks/useMissionControl';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2 } from 'lucide-react';
 
 // Maintenance message templates
 const MAINTENANCE_TEMPLATES = [
@@ -75,6 +81,7 @@ const MAINTENANCE_TEMPLATES = [
 const MAX_MESSAGE_LENGTH = 200;
 
 export default function SystemSettingsPage() {
+  const { user } = useAuth();
   const { data: settings, isLoading: settingsLoading } = useSystemSettings();
   const { data: broadcasts, isLoading: broadcastsLoading } = useBroadcasts();
   const { data: auditLogs, isLoading: auditLoading } = useGlobalAuditLogs({
@@ -84,6 +91,8 @@ export default function SystemSettingsPage() {
   const updateSetting = useUpdateSystemSetting();
   const createBroadcast = useCreateBroadcast();
   const toggleBroadcast = useToggleBroadcast();
+  const updateUsername = useUpdateUsername();
+  const updatePassword = useUpdateOwnPassword();
 
   const [maintenanceMessage, setMaintenanceMessage] = useState('');
   const [showMaintenanceConfirm, setShowMaintenanceConfirm] = useState(false);
@@ -97,6 +106,34 @@ export default function SystemSettingsPage() {
     target_businesses: null as string[] | null,
     expires_at: '',
   });
+
+  // Account settings state
+  const [currentUsername, setCurrentUsername] = useState('');
+  const [newUsername, setNewUsername] = useState('');
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [usernameLoading, setUsernameLoading] = useState(false);
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Fetch current username
+  useEffect(() => {
+    if (user?.id) {
+      supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', user.id)
+        .single()
+        .then(({ data }) => {
+          if (data?.username) {
+            setCurrentUsername(data.username);
+            setNewUsername(data.username);
+          }
+        });
+    }
+  }, [user?.id]);
 
   // Get current maintenance settings
   const currentMaintenance = settings?.find(s => s.key === 'maintenance_mode');
@@ -197,6 +234,68 @@ export default function SystemSettingsPage() {
     if (action.includes('maintenance')) return <Power className="h-4 w-4" />;
     if (action.includes('broadcast')) return <Megaphone className="h-4 w-4" />;
     return <FileText className="h-4 w-4" />;
+  };
+
+  const handleUpdateUsername = async () => {
+    if (!user?.id) return;
+    
+    const usernameTrimmed = newUsername.trim();
+    
+    if (usernameTrimmed) {
+      const usernamePattern = /^[a-zA-Z0-9_]{3,30}$/;
+      if (!usernamePattern.test(usernameTrimmed)) {
+        toast.error('Username must be 3-30 characters and only contain letters, numbers, or underscores');
+        return;
+      }
+    }
+    
+    setUsernameLoading(true);
+    try {
+      await updateUsername.mutateAsync({
+        userId: user.id,
+        username: usernameTrimmed || null,
+      });
+      setCurrentUsername(usernameTrimmed);
+    } catch (error) {
+      // Error already handled by hook
+    } finally {
+      setUsernameLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      toast.error('Please fill in all password fields');
+      return;
+    }
+    
+    if (passwordForm.newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+    
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('New password and confirm password do not match');
+      return;
+    }
+    
+    setPasswordLoading(true);
+    try {
+      await updatePassword.mutateAsync({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      });
+      // Clear form on success
+      setPasswordForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (error) {
+      // Error already handled by hook
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   return (
@@ -429,6 +528,95 @@ export default function SystemSettingsPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Account Settings - Full Width */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            Account Settings
+          </CardTitle>
+          <CardDescription>
+            Update your username and password
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Update Username Section */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="username (3-30 chars, letters, numbers, underscore)"
+                  pattern="[a-zA-Z0-9_]{3,30}"
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  You can login using this username instead of email
+                </p>
+              </div>
+              <Button 
+                onClick={handleUpdateUsername} 
+                disabled={usernameLoading || newUsername === currentUsername}
+                className="w-full"
+              >
+                {usernameLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update Username
+              </Button>
+            </div>
+
+            {/* Update Password Section */}
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="currentPassword">Current Password</Label>
+                <Input
+                  id="currentPassword"
+                  type="password"
+                  value={passwordForm.currentPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+              <div>
+                <Label htmlFor="newPassword">New Password</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={passwordForm.newPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                  minLength={6}
+                  className="mt-2"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Must be at least 6 characters
+                </p>
+              </div>
+              <div>
+                <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={passwordForm.confirmPassword}
+                  onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                  className="mt-2"
+                />
+              </div>
+              <Button 
+                onClick={handleUpdatePassword} 
+                disabled={passwordLoading || !passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                className="w-full"
+              >
+                {passwordLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update Password
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* System Broadcasts - Full Width */}
       <Card>

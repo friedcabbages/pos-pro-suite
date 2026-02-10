@@ -18,6 +18,7 @@ import {
   Clock,
 } from 'lucide-react';
 import { useBusinessActivityLogs, useExportData } from '@/hooks/useActivityLogs';
+import { usePlanAccess } from '@/hooks/usePlanAccess';
 import { format, formatDistanceToNow } from 'date-fns';
 
 const actionIcons: Record<string, React.ReactNode> = {
@@ -57,11 +58,14 @@ const actionColors: Record<string, string> = {
 export default function ActivityHistory() {
   const [entityFilter, setEntityFilter] = useState<string>('all');
   const exportData = useExportData();
+  const plan = usePlanAccess();
   
   const { data: logs, isLoading } = useBusinessActivityLogs({
     entity_type: entityFilter === 'all' ? undefined : entityFilter,
     limit: 200,
   });
+
+  const resolvedDeviceLimit = plan.resolvedDeviceLimit;
 
   return (
     <DashboardLayout>
@@ -167,6 +171,13 @@ export default function ActivityHistory() {
                   {logs.map((log, idx) => {
                     const Icon = actionIcons[log.action] || <Activity className="h-4 w-4" />;
                     const colorClass = actionColors[log.action] || 'bg-muted text-muted-foreground';
+                    const deviceMeta =
+                      log.action === "device_limit_blocked"
+                        ? {
+                            current: (log.metadata as any)?.current as number | undefined,
+                            maxDevices: (log.metadata as any)?.maxDevices as number | undefined,
+                          }
+                        : null;
                     
                     return (
                       <div key={log.id} className="flex gap-4 relative">
@@ -188,6 +199,16 @@ export default function ActivityHistory() {
                               <p className="text-sm text-muted-foreground">
                                 {log.description || `${log.entity_type} action performed`}
                               </p>
+                              {deviceMeta && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  Limit at the time: {deviceMeta.current ?? "?"}/{deviceMeta.maxDevices ?? "?"}
+                                  {resolvedDeviceLimit &&
+                                  deviceMeta.maxDevices &&
+                                  resolvedDeviceLimit !== deviceMeta.maxDevices
+                                    ? ` • Current limit: ${resolvedDeviceLimit}`
+                                    : ""}
+                                </p>
+                              )}
                             </div>
                             <div className="text-right shrink-0">
                               <p className="text-sm text-muted-foreground">

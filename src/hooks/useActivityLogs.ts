@@ -51,7 +51,7 @@ export function useBusinessActivityLogs(filters?: {
       
       const { data, error } = await query;
       if (error) throw error;
-      return data as ActivityLog[];
+      return (data ?? []) as ActivityLog[];
     },
     enabled: !!business?.id,
   });

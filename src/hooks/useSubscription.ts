@@ -171,11 +171,12 @@ export function useRequestUpgrade() {
 // Get subscription status info
 export function useSubscriptionStatus() {
   const businessContext = useBusiness();
-  const { data: subscription } = useCurrentSubscription();
-  const { data: plans } = useSubscriptionPlans();
+  const { data: subscription, isLoading: subscriptionLoading } = useCurrentSubscription();
+  const { data: plans, isLoading: plansLoading } = useSubscriptionPlans();
   
   const currentPlan = subscription?.plan || plans?.find(p => p.name === 'basic');
-  
+  const planReady = !!currentPlan && !subscriptionLoading && !plansLoading;
+
   // Calculate status from business data
   const businessStatus = businessContext.business?.status || 'trial';
   const trialEndAt = businessContext.business?.trial_end_at;
@@ -189,6 +190,7 @@ export function useSubscriptionStatus() {
     subscription,
     currentPlan,
     plans,
+    planReady,
     businessStatus,
     isTrialExpired,
     trialDaysRemaining,
