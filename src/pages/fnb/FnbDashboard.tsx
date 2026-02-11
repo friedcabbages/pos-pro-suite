@@ -12,6 +12,7 @@ import {
   Package,
   BarChart3,
   Boxes,
+  Tag,
 } from "lucide-react";
 
 export default function FnbDashboard() {
@@ -60,6 +61,13 @@ export default function FnbDashboard() {
       description: "Recipe/BOM and ingredient tracking",
       href: "/fnb/inventory",
       icon: Boxes,
+      adminOnly: true,
+    },
+    {
+      title: "Promo & Bundles",
+      description: "Manage promotions and product bundles",
+      href: "/fnb/promo",
+      icon: Tag,
       adminOnly: true,
     },
     {

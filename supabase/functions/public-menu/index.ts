@@ -103,7 +103,7 @@ serve(async (req) => {
     const { data: modifiers } = groupIds.length
       ? await adminClient
           .from("fnb_modifiers")
-          .select("id, group_id, name, price_delta, sort_order")
+          .select("id, group_id, name, price_delta, price_type, sort_order")
           .in("group_id", groupIds)
           .eq("is_active", true)
           .order("sort_order", { ascending: true })

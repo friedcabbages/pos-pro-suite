@@ -92,6 +92,7 @@ const getNavigationForBusinessType = (businessType: string): NavItem[] => {
         { name: "Cashier", href: "/fnb/cashier", icon: Receipt },
         { name: "Menu", href: "/fnb/menu", icon: Package, adminOnly: true },
         { name: "Inventory (BOM)", href: "/fnb/inventory", icon: Boxes, adminOnly: true },
+        { name: "Promo & Bundles", href: "/fnb/promo", icon: Tag, adminOnly: true },
         { name: "Reports", href: "/fnb/reports", icon: BarChart3, adminOnly: true },
         { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
       ];

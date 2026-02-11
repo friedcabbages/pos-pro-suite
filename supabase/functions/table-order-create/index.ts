@@ -28,6 +28,7 @@ type OrderItemInput = {
   quantity: number;
   notes?: string;
   modifiers?: Record<string, unknown>;
+  price?: number; // optional override (base + modifier total)
 };
 
 serve(async (req) => {
@@ -122,11 +123,12 @@ serve(async (req) => {
 
     const orderItems = items.map((item) => {
       const product = productMap.get(item.product_id) as any;
+      const price = typeof item.price === "number" && item.price >= 0 ? item.price : product.sell_price;
       return {
         order_id: orderData.id,
         product_id: item.product_id,
         quantity: item.quantity,
-        price: product.sell_price,
+        price,
         station: product.prep_station ?? null,
         notes: typeof item.notes === "string" ? item.notes.trim() : null,
         modifiers_json: item.modifiers ?? {},

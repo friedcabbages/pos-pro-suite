@@ -49,6 +49,7 @@ import FnbKDS from "./pages/fnb/FnbKDS";
 import FnbCashier from "./pages/fnb/FnbCashier";
 import FnbMenu from "./pages/fnb/FnbMenu";
 import FnbInventory from "./pages/fnb/FnbInventory";
+import FnbPromo from "./pages/fnb/FnbPromo";
 import FnbReports from "./pages/fnb/FnbReports";
 
 // Public ordering pages
@@ -183,6 +184,7 @@ const App = () => (
                 <Route path="/fnb/cashier" element={<ProtectedRoute><FnbCashier /></ProtectedRoute>} />
                 <Route path="/fnb/menu" element={<AdminRoute><FnbMenu /></AdminRoute>} />
                 <Route path="/fnb/inventory" element={<AdminRoute><FnbInventory /></AdminRoute>} />
+                <Route path="/fnb/promo" element={<AdminRoute><FnbPromo /></AdminRoute>} />
                 <Route path="/fnb/reports" element={<AdminRoute><FnbReports /></AdminRoute>} />
 
                 {/* Service & Venue routes (placeholder) */}

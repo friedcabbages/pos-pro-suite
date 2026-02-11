@@ -572,7 +572,7 @@ serve(async (req) => {
         
         const userMetadata: Record<string, string> = { full_name: owner_name || owner_email.split('@')[0] };
         if (ownerUsernameLower) userMetadata.username = ownerUsernameLower;
-        const { data: authData, error: authError } = await adminClient.auth.admin.createUser({ email: owner_email, password: owner_password, email_confirm: true, user_metadata });
+        const { data: authData, error: authError } = await adminClient.auth.admin.createUser({ email: owner_email, password: owner_password, email_confirm: true, user_metadata: userMetadata });
         if (authError) return new Response(JSON.stringify({ error: authError.message }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
         const newUserId = authData.user?.id;
         const trialEndAt = new Date(); trialEndAt.setDate(trialEndAt.getDate() + 7);

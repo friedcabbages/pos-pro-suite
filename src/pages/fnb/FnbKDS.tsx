@@ -6,50 +6,46 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChefHat, Clock, Printer, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  useFnbOrders,
+  useUpdateFnbOrderItemStatus,
+} from "@/hooks/useFnb";
 
 export default function FnbKDS() {
   const { toast } = useToast();
-  const [activeStation] = useState<"kitchen" | "bar">("kitchen");
+  const [activeStation, setActiveStation] = useState<"kitchen" | "bar">("kitchen");
 
-  const orders = [
-    {
-      id: "1",
-      tableName: "Table 1",
-      items: [
-        { id: "1", name: "Nasi Goreng", quantity: 2, status: "preparing", station: "kitchen" },
-        { id: "2", name: "Es Teh", quantity: 2, status: "preparing", station: "bar" },
-      ],
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "2",
-      tableName: "Table 2",
-      items: [
-        { id: "3", name: "Mie Ayam", quantity: 1, status: "ready", station: "kitchen" },
-      ],
-      createdAt: new Date().toISOString(),
-    },
-  ];
+  const { data: orders = [], isLoading } = useFnbOrders({
+    statusIn: ["accepted", "preparing", "ready"],
+  });
+  const updateItemStatus = useUpdateFnbOrderItemStatus();
 
-  const handleUpdateStatus = (orderId: string, itemId: string, newStatus: string) => {
-    toast({
-      title: "Status updated",
-      description: `Item status updated to ${newStatus}.`,
-    });
+  const handleUpdateStatus = async (itemId: string, newStatus: "preparing" | "ready" | "served") => {
+    await updateItemStatus.mutateAsync({ itemId, status: newStatus });
+    toast({ title: "Status updated", description: `Item marked as ${newStatus}.` });
   };
 
   const handlePrintTicket = (orderId: string) => {
-    toast({
-      title: "Printing ticket",
-      description: "Opening print dialog...",
-    });
+    toast({ title: "Printing ticket", description: "Opening print dialog..." });
     window.print();
   };
 
-  const filteredOrders = orders.map((order) => ({
-    ...order,
-    items: order.items.filter((item) => item.station === activeStation),
-  })).filter((order) => order.items.length > 0);
+  const grouped = orders.map((order) => {
+    const tableName = (order.fnb_tables as { name?: string } | null)?.name ?? "Takeaway";
+    const items = (order.fnb_order_items as Array<{
+      id: string;
+      quantity: number;
+      status: string;
+      station: string | null;
+      products: { name?: string } | null;
+    }>) ?? [];
+    const filteredItems = items.filter((i) => (i.station ?? "kitchen") === activeStation);
+    return {
+      ...order,
+      tableName,
+      items: filteredItems,
+    };
+  }).filter((o) => o.items.length > 0);
 
   return (
     <DashboardLayout>
@@ -64,14 +60,16 @@ export default function FnbKDS() {
           </p>
         </div>
 
-        <Tabs defaultValue="kitchen" className="w-full">
+        <Tabs value={activeStation} onValueChange={(v) => setActiveStation(v as "kitchen" | "bar")} className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="kitchen">Kitchen</TabsTrigger>
             <TabsTrigger value="bar">Bar</TabsTrigger>
           </TabsList>
 
           <TabsContent value="kitchen" className="space-y-4">
-            {filteredOrders.length === 0 ? (
+            {isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading...</div>
+            ) : grouped.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -79,7 +77,7 @@ export default function FnbKDS() {
                 </CardContent>
               </Card>
             ) : (
-              filteredOrders.map((order) => (
+              grouped.map((order) => (
                 <Card key={order.id}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -87,14 +85,10 @@ export default function FnbKDS() {
                         <CardTitle className="text-lg">{order.tableName}</CardTitle>
                         <CardDescription>
                           <Clock className="h-3 w-3 inline mr-1" />
-                          {new Date(order.createdAt).toLocaleTimeString()}
+                          {new Date(order.created_at).toLocaleTimeString()}
                         </CardDescription>
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePrintTicket(order.id)}
-                      >
+                      <Button variant="outline" size="sm" onClick={() => handlePrintTicket(order.id)}>
                         <Printer className="h-4 w-4 mr-2" />
                         Print
                       </Button>
@@ -109,13 +103,13 @@ export default function FnbKDS() {
                         >
                           <div>
                             <div className="font-medium">
-                              {item.quantity}x {item.name}
+                              {item.quantity}x {(item.products as { name?: string } | null)?.name ?? "Item"}
                             </div>
                             <Badge
                               variant={
                                 item.status === "preparing"
                                   ? "default"
-                                  : item.status === "ready"
+                                  : item.status === "ready" || item.status === "served"
                                   ? "secondary"
                                   : "outline"
                               }
@@ -125,12 +119,21 @@ export default function FnbKDS() {
                             </Badge>
                           </div>
                           <div className="flex gap-2">
+                            {item.status === "pending" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleUpdateStatus(item.id, "preparing")}
+                                disabled={updateItemStatus.isPending}
+                              >
+                                Start
+                              </Button>
+                            )}
                             {item.status === "preparing" && (
                               <Button
                                 size="sm"
-                                onClick={() =>
-                                  handleUpdateStatus(order.id, item.id, "ready")
-                                }
+                                onClick={() => handleUpdateStatus(item.id, "ready")}
+                                disabled={updateItemStatus.isPending}
                               >
                                 <CheckCircle2 className="h-4 w-4 mr-2" />
                                 Ready
@@ -147,12 +150,86 @@ export default function FnbKDS() {
           </TabsContent>
 
           <TabsContent value="bar" className="space-y-4">
-            <Card>
-              <CardContent className="py-12 text-center">
-                <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No active orders for bar</p>
-              </CardContent>
-            </Card>
+            {isLoading ? (
+              <div className="text-center py-12 text-muted-foreground">Loading...</div>
+            ) : grouped.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                  <p className="text-muted-foreground">No active orders for bar</p>
+                </CardContent>
+              </Card>
+            ) : (
+              grouped.map((order) => (
+                <Card key={order.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{order.tableName}</CardTitle>
+                        <CardDescription>
+                          <Clock className="h-3 w-3 inline mr-1" />
+                          {new Date(order.created_at).toLocaleTimeString()}
+                        </CardDescription>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => handlePrintTicket(order.id)}>
+                        <Printer className="h-4 w-4 mr-2" />
+                        Print
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-2">
+                      {order.items.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                        >
+                          <div>
+                            <div className="font-medium">
+                              {item.quantity}x {(item.products as { name?: string } | null)?.name ?? "Item"}
+                            </div>
+                            <Badge
+                              variant={
+                                item.status === "preparing"
+                                  ? "default"
+                                  : item.status === "ready" || item.status === "served"
+                                  ? "secondary"
+                                  : "outline"
+                              }
+                              className="mt-1"
+                            >
+                              {item.status}
+                            </Badge>
+                          </div>
+                          <div className="flex gap-2">
+                            {item.status === "pending" && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleUpdateStatus(item.id, "preparing")}
+                                disabled={updateItemStatus.isPending}
+                              >
+                                Start
+                              </Button>
+                            )}
+                            {item.status === "preparing" && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleUpdateStatus(item.id, "ready")}
+                                disabled={updateItemStatus.isPending}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-2" />
+                                Ready
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </TabsContent>
         </Tabs>
       </div>

@@ -1,64 +1,38 @@
-import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingBag, CheckCircle2, XCircle, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFnbOrders, useUpdateFnbOrderStatus } from "@/hooks/useFnb";
+import { useBusiness } from "@/contexts/BusinessContext";
 
 export default function FnbOrders() {
   const { toast } = useToast();
-  const [orders] = useState<Array<{
-    id: string;
-    tableName: string;
-    customerName: string | null;
-    itemCount: number;
-    total: number;
-    status: string;
-    createdAt: string;
-  }>>([
-    {
-      id: "1",
-      tableName: "Table 1",
-      customerName: null,
-      itemCount: 3,
-      total: 125000,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    },
-    {
-      id: "2",
-      tableName: "Table 2",
-      customerName: "John Doe",
-      itemCount: 2,
-      total: 85000,
-      status: "pending",
-      createdAt: new Date().toISOString(),
-    },
-  ]);
+  const { business } = useBusiness();
+  const { data: orders = [], isLoading } = useFnbOrders({
+    statusIn: ["pending", "accepted", "preparing", "ready"],
+  });
+  const updateStatus = useUpdateFnbOrderStatus();
 
-  const handleAccept = (orderId: string) => {
-    toast({
-      title: "Order accepted",
-      description: "Order has been sent to kitchen.",
-    });
+  const handleAccept = async (orderId: string) => {
+    await updateStatus.mutateAsync({ orderId, status: "accepted" });
+    toast({ title: "Order accepted", description: "Sent to kitchen." });
   };
 
-  const handleReject = (orderId: string) => {
-    toast({
-      title: "Order rejected",
-      description: "Order has been rejected.",
-      variant: "destructive",
-    });
+  const handleReject = async (orderId: string) => {
+    await updateStatus.mutateAsync({ orderId, status: "rejected" });
+    toast({ title: "Order rejected", variant: "destructive" });
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat("id-ID", {
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("id-ID", {
       style: "currency",
-      currency: "IDR",
+      currency: business?.currency ?? "IDR",
       minimumFractionDigits: 0,
     }).format(value);
-  };
+
+  const pendingOrders = orders.filter((o) => o.status === "pending");
 
   return (
     <DashboardLayout>
@@ -73,63 +47,64 @@ export default function FnbOrders() {
           </p>
         </div>
 
-        <div className="space-y-4">
-          {orders.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-                <p className="text-muted-foreground">No pending orders</p>
-              </CardContent>
-            </Card>
-          ) : (
-            orders.map((order) => (
-              <Card key={order.id}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{order.tableName}</CardTitle>
-                      <CardDescription>
-                        {order.customerName || "Walk-in"} • {order.itemCount} items
-                      </CardDescription>
+        {isLoading ? (
+          <div className="text-center py-12 text-muted-foreground">Loading...</div>
+        ) : pendingOrders.length === 0 ? (
+          <Card>
+            <CardContent className="py-12 text-center">
+              <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <p className="text-muted-foreground">No pending orders</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {pendingOrders.map((order) => {
+              const tableName = (order.fnb_tables as { name?: string } | null)?.name ?? "Takeaway";
+              const items = (order.fnb_order_items as Array<{ quantity: number; price: number }>) ?? [];
+              const itemCount = items.reduce((s, i) => s + (i.quantity ?? 0), 0);
+              const total = items.reduce((s, i) => s + (i.quantity ?? 0) * Number(i.price ?? 0), 0);
+              return (
+                <Card key={order.id}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-lg">{tableName}</CardTitle>
+                        <CardDescription>
+                          {order.customer_name || "Walk-in"} • {itemCount} items
+                        </CardDescription>
+                      </div>
+                      <Badge variant="default">{order.status}</Badge>
                     </div>
-                    <Badge
-                      variant={
-                        order.status === "pending"
-                          ? "default"
-                          : order.status === "accepted"
-                          ? "secondary"
-                          : "destructive"
-                      }
-                    >
-                      {order.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="text-lg font-semibold">
-                      {formatCurrency(order.total)}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex items-center justify-between">
+                      <div className="text-lg font-semibold">{formatCurrency(total)}</div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleReject(order.id)}
+                          disabled={updateStatus.isPending}
+                        >
+                          <XCircle className="h-4 w-4 mr-2" />
+                          Reject
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => handleAccept(order.id)}
+                          disabled={updateStatus.isPending}
+                        >
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Accept
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleReject(order.id)}
-                      >
-                        <XCircle className="h-4 w-4 mr-2" />
-                        Reject
-                      </Button>
-                      <Button size="sm" onClick={() => handleAccept(order.id)}>
-                        <CheckCircle2 className="h-4 w-4 mr-2" />
-                        Accept
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))
-          )}
-        </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
     </DashboardLayout>
   );

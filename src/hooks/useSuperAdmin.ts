@@ -83,6 +83,9 @@ interface CreateBusinessPayload {
   business_type?: 'retail' | 'fnb' | 'service' | 'venue';
 }
 
+const redactEmails = (value: string) =>
+  value.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted-email]');
+
 // Check if current user is super admin
 // DEPRECATED: Use useSuperAdminCheck from @/hooks/useSuperAdminCheck instead
 // This is kept for backwards compatibility with existing code
@@ -198,10 +201,60 @@ export function useCreateBusinessWithOwner() {
 
   return useMutation({
     mutationFn: async (payload: CreateBusinessPayload) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:204',message:'create_business_with_owner invoke start',data:{business_type: payload.business_type ?? null,currency: payload.currency ?? null,has_owner_email: Boolean(payload.owner_email),has_owner_password: Boolean(payload.owner_password),has_owner_username: Boolean(payload.owner_username),has_owner_name: Boolean(payload.owner_name)},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H1'})}).catch(()=>{});
+      // #endregion
       const { data, error } = await supabase.functions.invoke('admin-actions', {
         body: { action: 'create_business_with_owner', payload },
       });
-      if (error) throw error;
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:210',message:'create_business_with_owner invoke result',data:{has_data: Boolean(data),error_message: (error as Error | null)?.message ?? null,error_name: (error as Error | null)?.name ?? null,error_status: (error as { status?: number } | null)?.status ?? null,error_details: (error as { details?: string } | null)?.details ?? null,context_status: (error as { context?: { status?: number } } | null)?.context?.status ?? null,context_status_text: (error as { context?: { statusText?: string } } | null)?.context?.statusText ?? null,context_body_type: typeof (error as { context?: { body?: unknown } } | null)?.context?.body},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H2'})}).catch(()=>{});
+      // #endregion
+      if (error) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:214',message:'create_business_with_owner error follow-up check',data:{error_name:(error as Error | null)?.name ?? null},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
+        // #endregion
+        try {
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+          const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+          const session = await supabase.auth.getSession();
+          const accessToken = session.data.session?.access_token;
+          if (supabaseUrl && supabaseKey && accessToken) {
+            const response = await fetch(`${supabaseUrl}/functions/v1/admin-actions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+                apikey: supabaseKey,
+              },
+              body: JSON.stringify({ action: 'create_business_with_owner', payload }),
+            });
+            const responseText = await response.text();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:234',message:'direct admin-actions response',data:{status:response.status,status_text:response.statusText,body: redactEmails(responseText).slice(0, 500)},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
+            // #endregion
+          } else {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:240',message:'direct admin-actions response skipped',data:{has_supabase_url:Boolean(supabaseUrl),has_supabase_key:Boolean(supabaseKey),has_access_token:Boolean(accessToken)},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
+            // #endregion
+          }
+        } catch {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:244',message:'direct admin-actions response threw exception',data:{},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H4'})}).catch(()=>{});
+          // #endregion
+        }
+        try {
+          const probe = await supabase.functions.invoke('admin-actions', { body: { action: 'check_super_admin' } });
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:249',message:'admin-actions probe result after create failure',data:{probe_has_data:Boolean(probe.data),probe_error_message:(probe.error as Error | null)?.message ?? null,probe_error_name:(probe.error as Error | null)?.name ?? null,probe_context_status:(probe.error as { context?: { status?: number } } | null)?.context?.status ?? null,probe_context_body:(probe.error as { context?: { body?: unknown } } | null)?.context?.body ?? null},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
+          // #endregion
+        } catch {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/844ea090-2821-4a01-bcfe-1c636f5c15cb',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'src/hooks/useSuperAdmin.ts:253',message:'admin-actions probe threw exception',data:{},timestamp:Date.now(),runId:'pre-fix',hypothesisId:'H3'})}).catch(()=>{});
+          // #endregion
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
