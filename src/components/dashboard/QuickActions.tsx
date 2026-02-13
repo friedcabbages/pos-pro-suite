@@ -7,44 +7,26 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { useBusiness } from "@/contexts/BusinessContext";
 
-const actions = [
-  {
-    id: 'new-sale',
-    label: 'New Sale',
-    description: 'Start a transaction',
-    icon: ShoppingCart,
-    path: '/pos',
-    variant: 'default' as const,
-  },
-  {
-    id: 'add-product',
-    label: 'Add Product',
-    description: 'Create new item',
-    icon: Package,
-    path: '/products',
-    variant: 'outline' as const,
-  },
-  {
-    id: 'add-stock',
-    label: 'Add Stock',
-    description: 'Update inventory',
-    icon: PackagePlus,
-    path: '/inventory',
-    variant: 'outline' as const,
-  },
-  {
-    id: 'view-reports',
-    label: 'View Reports',
-    description: 'See analytics',
-    icon: BarChart3,
-    path: '/reports',
-    variant: 'outline' as const,
-  },
+const retailActions = [
+  { id: 'new-sale', label: 'New Sale', description: 'Start a transaction', icon: ShoppingCart, path: '/retail/pos', variant: 'default' as const },
+  { id: 'add-product', label: 'Add Product', description: 'Create new item', icon: Package, path: '/retail/products', variant: 'outline' as const },
+  { id: 'add-stock', label: 'Add Stock', description: 'Update inventory', icon: PackagePlus, path: '/retail/inventory', variant: 'outline' as const },
+  { id: 'view-reports', label: 'View Reports', description: 'See analytics', icon: BarChart3, path: '/retail/reports', variant: 'outline' as const },
+];
+
+const fnbActions = [
+  { id: 'new-sale', label: 'Cashier', description: 'Process payments', icon: ShoppingCart, path: '/fnb/cashier', variant: 'default' as const },
+  { id: 'add-product', label: 'Menu', description: 'Manage menu items', icon: Package, path: '/fnb/menu', variant: 'outline' as const },
+  { id: 'add-stock', label: 'Inventory', description: 'Recipe & BOM', icon: PackagePlus, path: '/fnb/inventory', variant: 'outline' as const },
+  { id: 'view-reports', label: 'Reports', description: 'See analytics', icon: BarChart3, path: '/fnb/reports', variant: 'outline' as const },
 ];
 
 export function QuickActions() {
   const navigate = useNavigate();
+  const { business } = useBusiness();
+  const actions = business?.business_type === 'fnb' ? fnbActions : retailActions;
 
   return (
     <div className="rounded-xl border border-border bg-card p-5 shadow-card">

@@ -69,11 +69,11 @@ export function SalesChart() {
             Start your first transaction to see performance trends here.
           </p>
           <Button 
-            onClick={() => navigate('/pos')}
+            onClick={() => navigate(business?.business_type === 'fnb' ? '/fnb/cashier' : '/retail/pos')}
             className="gap-2"
           >
             <ShoppingCart className="h-4 w-4" />
-            Open POS
+            {business?.business_type === 'fnb' ? 'Open Cashier' : 'Open POS'}
           </Button>
         </div>
       ) : (

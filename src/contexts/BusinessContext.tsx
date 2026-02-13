@@ -66,10 +66,64 @@ interface BusinessContextType {
   selectBranch: (branchId: string) => void;
   selectWarehouse: (warehouseId: string) => void;
   refetchBusiness: () => Promise<void>;
-  clearBusiness: () => void;
+  clearBusiness: (userId?: string) => void;
 }
 
 const BusinessContext = createContext<BusinessContextType | undefined>(undefined);
+
+const CACHE_KEY_PREFIX = 'pospro.business_cache.';
+const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+type BusinessCacheData = {
+  business: Business;
+  userRole: UserRole;
+  branches: Branch[];
+  warehouses: Warehouse[];
+  branch: Branch | null;
+  warehouse: Warehouse | null;
+  savedAt: string;
+};
+
+function getCacheKey(userId: string): string {
+  return `${CACHE_KEY_PREFIX}${userId}`;
+}
+
+function saveBusinessCache(userId: string, data: Omit<BusinessCacheData, 'savedAt'>): void {
+  try {
+    const payload: BusinessCacheData = { ...data, savedAt: new Date().toISOString() };
+    localStorage.setItem(getCacheKey(userId), JSON.stringify(payload));
+  } catch {
+    // Ignore storage errors
+  }
+}
+
+function loadBusinessCache(userId: string): BusinessCacheData | null {
+  try {
+    const raw = localStorage.getItem(getCacheKey(userId));
+    if (!raw) return null;
+    const data = JSON.parse(raw) as BusinessCacheData;
+    const savedAt = data.savedAt ? new Date(data.savedAt).getTime() : 0;
+    if (Date.now() - savedAt > CACHE_MAX_AGE_MS) return null;
+    if (!data.business || !data.userRole) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function clearBusinessCache(userId: string | null): void {
+  try {
+    if (userId) {
+      localStorage.removeItem(getCacheKey(userId));
+    } else {
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith(CACHE_KEY_PREFIX)) localStorage.removeItem(key);
+      });
+    }
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 export function BusinessProvider({ children }: { children: ReactNode }) {
   const { user, initialized: authInitialized } = useAuth();
@@ -87,8 +141,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
   const lastUserIdRef = useRef<string | null>(null);
   const lastImpersonationBusinessIdRef = useRef<string | null>(null);
 
-  const clearBusiness = useCallback(() => {
+  const clearBusiness = useCallback((userId?: string) => {
     console.log('[Business] Clearing state');
+    clearBusinessCache(userId ?? lastUserIdRef.current ?? null);
     setBusiness(null);
     setBranch(null);
     setWarehouse(null);
@@ -115,6 +170,24 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
     fetchingRef.current = true;
     setLoading(true);
     console.log('[Business] Fetching data for user:', user.id);
+
+    // Offline: try restore from cache first
+    if (typeof navigator !== 'undefined' && !navigator.onLine && !isImpersonating) {
+      const cached = loadBusinessCache(user.id);
+      if (cached) {
+        console.log('[Business] Offline - restored from cache');
+        setBusiness(cached.business);
+        setUserRole(cached.userRole);
+        setBranches(cached.branches);
+        setWarehouses(cached.warehouses);
+        setBranch(cached.branch);
+        setWarehouse(cached.warehouse);
+        lastUserIdRef.current = user.id;
+        setLoading(false);
+        fetchingRef.current = false;
+        return;
+      }
+    }
 
     try {
       // 1. Check super admin first (skip if impersonating)
@@ -290,6 +363,23 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
         if (roleError) {
           console.error('[Business] Role fetch error:', roleError);
+          if (!navigator.onLine) {
+            const cached = loadBusinessCache(user.id);
+            if (cached) {
+              console.log('[Business] Offline - restored from cache after role error');
+              setBusiness(cached.business);
+              setUserRole(cached.userRole);
+              setBranches(cached.branches);
+              setWarehouses(cached.warehouses);
+              setBranch(cached.branch);
+              setWarehouse(cached.warehouse);
+              lastUserIdRef.current = user.id;
+            } else {
+              clearBusiness(user.id);
+            }
+          } else {
+            clearBusiness(user.id);
+          }
           fetchingRef.current = false;
           setLoading(false);
           return;
@@ -297,7 +387,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
         if (!normalRoleData) {
           console.log('[Business] No role found - user needs onboarding');
-          clearBusiness();
+          clearBusiness(user.id);
           lastUserIdRef.current = user.id;
           fetchingRef.current = false;
           setLoading(false);
@@ -319,7 +409,23 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
 
       if (businessError || !businessData) {
         console.error('[Business] Business fetch error:', businessError);
-        clearBusiness();
+        if (!navigator.onLine) {
+          const cached = loadBusinessCache(user.id);
+          if (cached) {
+            console.log('[Business] Offline - restored from cache after business error');
+            setBusiness(cached.business);
+            setUserRole(cached.userRole);
+            setBranches(cached.branches);
+            setWarehouses(cached.warehouses);
+            setBranch(cached.branch);
+            setWarehouse(cached.warehouse);
+            lastUserIdRef.current = user.id;
+          } else {
+            clearBusiness(user.id);
+          }
+        } else {
+          clearBusiness(user.id);
+        }
         lastUserIdRef.current = user.id;
         fetchingRef.current = false;
         setLoading(false);
@@ -336,6 +442,9 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         .eq('business_id', businessData.id)
         .eq('is_active', true);
 
+      let cachedBranch: Branch | null = null;
+      let cachedWarehouses: Warehouse[] = [];
+
       if (branchesData && branchesData.length > 0) {
         setBranches(branchesData as Branch[]);
 
@@ -344,6 +453,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
           : branchesData[0];
 
         setBranch(defaultBranch as Branch);
+        cachedBranch = defaultBranch as Branch;
 
         // Get warehouses for the selected branch
         const { data: warehousesData } = await supabase
@@ -355,6 +465,7 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
         if (warehousesData && warehousesData.length > 0) {
           setWarehouses(warehousesData as Warehouse[]);
           setWarehouse(warehousesData[0] as Warehouse);
+          cachedWarehouses = warehousesData as Warehouse[];
         } else {
           setWarehouses([]);
           setWarehouse(null);
@@ -362,8 +473,31 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       }
 
       lastUserIdRef.current = user.id;
+
+      // Save to cache for offline use
+      saveBusinessCache(user.id, {
+        business: businessData as Business,
+        userRole: roleData,
+        branches: (branchesData ?? []) as Branch[],
+        warehouses: cachedWarehouses,
+        branch: cachedBranch,
+        warehouse: cachedWarehouses.length > 0 ? cachedWarehouses[0] : null,
+      });
     } catch (error) {
       console.error('[Business] Unexpected error:', error);
+      if (!navigator.onLine && user) {
+        const cached = loadBusinessCache(user.id);
+        if (cached) {
+          console.log('[Business] Offline - restored from cache after unexpected error');
+          setBusiness(cached.business);
+          setUserRole(cached.userRole);
+          setBranches(cached.branches);
+          setWarehouses(cached.warehouses);
+          setBranch(cached.branch);
+          setWarehouse(cached.warehouse);
+          lastUserIdRef.current = user.id;
+        }
+      }
     } finally {
       setLoading(false);
       fetchingRef.current = false;
@@ -402,6 +536,18 @@ export function BusinessProvider({ children }: { children: ReactNode }) {
       fetchBusinessData();
     }
   }, [user, authInitialized, fetchBusinessData, clearBusiness, isImpersonating, impersonationBusinessId]);
+
+  // Refetch when coming back online
+  useEffect(() => {
+    const onOnline = () => {
+      if (user && !isImpersonating) {
+        console.log('[Business] Back online - refetching');
+        void fetchBusinessData();
+      }
+    };
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [user, isImpersonating, fetchBusinessData]);
 
   const selectBranch = async (branchId: string) => {
     const selectedBranch = branches.find(b => b.id === branchId);

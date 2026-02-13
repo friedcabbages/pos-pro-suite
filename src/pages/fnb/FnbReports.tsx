@@ -1,22 +1,27 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart3, TrendingUp, DollarSign, Package } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
+import { useDashboardStats, useTopProducts } from "@/hooks/useDashboard";
+import { useBusiness } from "@/contexts/BusinessContext";
+import { SalesChart } from "@/components/dashboard/SalesChart";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function FnbReports() {
+  const { business } = useBusiness();
+  const { data: stats, isLoading: statsLoading, isError: statsError, error: statsErrorObj, refetch: refetchStats } = useDashboardStats();
+  const { data: topProducts, isLoading: topLoading } = useTopProducts();
+
   const formatCurrency = (value: number) => {
+    const currency = business?.currency || "IDR";
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
-      currency: "IDR",
+      currency,
       minimumFractionDigits: 0,
     }).format(value);
   };
 
-  const stats = [
-    { label: "Today's Revenue", value: formatCurrency(2500000), icon: DollarSign },
-    { label: "Orders Today", value: "45", icon: Package },
-    { label: "Average Order Value", value: formatCurrency(55555), icon: TrendingUp },
-    { label: "Top Item", value: "Nasi Goreng", icon: BarChart3 },
-  ];
+  const avgOrderValue = stats && stats.totalOrders > 0 ? stats.todaySales / stats.totalOrders : 0;
 
   return (
     <DashboardLayout>
@@ -31,32 +36,63 @@ export default function FnbReports() {
           </p>
         </div>
 
+        <QueryBoundary isLoading={statsLoading || topLoading} isError={!!statsError} error={statsErrorObj ?? undefined} refetch={refetchStats}>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {stats.map((stat) => (
-            <Card key={stat.label}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-                <stat.icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stat.value}</div>
-              </CardContent>
-            </Card>
-          ))}
+          {statsLoading ? (
+            [...Array(4)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <Skeleton className="h-4 w-24" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-8 w-20" />
+                </CardContent>
+              </Card>
+            ))
+          ) : (
+            <>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Today&apos;s Revenue</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(stats?.todaySales ?? 0)}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Orders Today</CardTitle>
+                  <Package className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.totalOrders ?? 0}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Average Order Value</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{formatCurrency(avgOrderValue)}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Top Item</CardTitle>
+                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{stats?.bestSellerToday ?? "—"}</div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Sales Overview</CardTitle>
-              <CardDescription>Revenue and transaction trends</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-64 flex items-center justify-center text-muted-foreground">
-                Chart placeholder - Sales data visualization
-              </div>
-            </CardContent>
-          </Card>
+          <SalesChart />
 
           <Card>
             <CardHeader>
@@ -64,31 +100,40 @@ export default function FnbReports() {
               <CardDescription>Best selling items this period</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                {[
-                  { name: "Nasi Goreng", sales: 120, revenue: 3000000 },
-                  { name: "Mie Ayam", sales: 85, revenue: 1700000 },
-                  { name: "Es Teh", sales: 200, revenue: 1000000 },
-                ].map((item) => (
-                  <div
-                    key={item.name}
-                    className="flex items-center justify-between p-2 border rounded"
-                  >
-                    <div>
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {item.sales} orders
+              {topLoading ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <Skeleton key={i} className="h-14 w-full" />
+                  ))}
+                </div>
+              ) : !topProducts || topProducts.length === 0 ? (
+                <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">
+                  No sales data yet
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {topProducts.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center justify-between p-2 border rounded"
+                    >
+                      <div>
+                        <div className="font-medium">{item.name}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {item.quantity} sold
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-semibold">{formatCurrency(item.revenue)}</div>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="font-semibold">{formatCurrency(item.revenue)}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );

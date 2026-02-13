@@ -31,6 +31,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Tag, Plus, Loader2 } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import {
   useFnbPromotions,
   useCreateFnbPromotion,
@@ -61,7 +62,7 @@ export default function FnbPromo() {
   const [selProductId, setSelProductId] = useState("");
   const [selQty, setSelQty] = useState("1");
 
-  const { data: promotions = [], isLoading: promotionsLoading } = useFnbPromotions();
+  const { data: promotions = [], isLoading: promotionsLoading, isError: promotionsError, error: promotionsErrorObj, refetch: refetchPromotions } = useFnbPromotions();
   const { data: bundles = [], isLoading: bundlesLoading } = useFnbBundles();
   const { data: menuItems = [] } = useFnbMenuItems();
 
@@ -138,6 +139,7 @@ export default function FnbPromo() {
           </p>
         </div>
 
+        <QueryBoundary isLoading={promotionsLoading || bundlesLoading} isError={!!promotionsError} error={promotionsErrorObj ?? undefined} refetch={refetchPromotions}>
         <Tabs defaultValue="promotions">
           <TabsList>
             <TabsTrigger value="promotions">Promotions</TabsTrigger>
@@ -414,6 +416,7 @@ export default function FnbPromo() {
             </Card>
           </TabsContent>
         </Tabs>
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );

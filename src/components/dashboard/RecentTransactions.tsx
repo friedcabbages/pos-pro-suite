@@ -12,6 +12,7 @@ const paymentStyles: Record<string, string> = {
   card: "bg-secondary text-secondary-foreground",
   qris: "bg-accent/10 text-accent-foreground",
   transfer: "bg-muted text-muted-foreground",
+  order: "bg-primary/10 text-primary",
   other: "bg-muted text-muted-foreground",
 };
 
@@ -19,6 +20,10 @@ export function RecentTransactions() {
   const { data: transactions, isLoading } = useRecentTransactions();
   const { business } = useBusiness();
   const navigate = useNavigate();
+  const isFnb = business?.business_type === 'fnb';
+  const viewAllPath = isFnb ? '/fnb/orders' : '/retail/transactions';
+  const openPosPath = isFnb ? '/fnb/cashier' : '/retail/pos';
+  const openPosLabel = isFnb ? 'Open Cashier' : 'Open POS';
 
   const formatCurrency = (value: number) => {
     const currency = business?.currency || 'USD';
@@ -50,7 +55,7 @@ export function RecentTransactions() {
           <p className="text-sm text-muted-foreground">Latest sales activity</p>
         </div>
         {transactions && transactions.length > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => navigate("/transactions")}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(viewAllPath)}>
             View all
           </Button>
         )}
@@ -69,11 +74,11 @@ export function RecentTransactions() {
           </p>
           <Button 
             size="sm"
-            onClick={() => navigate('/pos')}
+            onClick={() => navigate(openPosPath)}
             className="gap-1.5"
           >
             <ShoppingCart className="h-4 w-4" />
-            Open POS
+            {openPosLabel}
           </Button>
         </div>
       ) : (

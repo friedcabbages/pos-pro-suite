@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Boxes, Plus, ChefHat, Trash2, Loader2, AlertTriangle } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import {
   useFnbRecipes,
   useFnbRecipeItems,
@@ -55,7 +56,8 @@ export default function FnbInventory() {
   const [newIngredientQty, setNewIngredientQty] = useState("1");
   const [newIngredientUnit, setNewIngredientUnit] = useState("pcs");
 
-  const [wasteWarehouseId, setWasteWarehouseId] = useState<string>("");
+  const [wasteWarehouseId, setWasteWarehouseId] = useState<string>("_all_");
+  const [wasteDialogWarehouseId, setWasteDialogWarehouseId] = useState<string>("");
   const [wasteDialogOpen, setWasteDialogOpen] = useState(false);
   const [wasteProductId, setWasteProductId] = useState("");
   const [wasteQty, setWasteQty] = useState("1");
@@ -64,16 +66,25 @@ export default function FnbInventory() {
   const [wasteBatch, setWasteBatch] = useState("");
   const [wasteNotes, setWasteNotes] = useState("");
 
-  const { data: recipes = [], isLoading: recipesLoading } = useFnbRecipes();
+  const { data: recipes = [], isLoading: recipesLoading, isError: recipesError, error: recipesErrorObj, refetch: refetchRecipes } = useFnbRecipes();
   const { data: menuItems = [] } = useFnbMenuItems();
   const { data: products = [] } = useFnbProducts();
   const { data: warehouses = [] } = useWarehouses();
   const recipeIds = useMemo(() => recipes.map((r) => r.id), [recipes]);
   const { data: recipeItems = [], isLoading: itemsLoading } = useFnbRecipeItems(recipeIds);
-  const { data: wasteLogs = [], isLoading: wasteLogsLoading } = useFnbWasteLogs(wasteWarehouseId || null);
+  const { data: wasteLogs = [], isLoading: wasteLogsLoading } = useFnbWasteLogs(wasteWarehouseId === "_all_" || !wasteWarehouseId ? null : wasteWarehouseId);
 
   const createRecipe = useCreateFnbRecipe();
   const createWasteLog = useCreateFnbWasteLog();
+
+  useEffect(() => {
+    if (wasteDialogOpen && warehouses.length > 0 && !wasteDialogWarehouseId) {
+      setWasteDialogWarehouseId(warehouses[0].id);
+    }
+    if (!wasteDialogOpen) {
+      setWasteDialogWarehouseId("");
+    }
+  }, [wasteDialogOpen, warehouses, wasteDialogWarehouseId]);
   const addRecipeItem = useAddRecipeItem();
   const deleteRecipeItem = useDeleteRecipeItem();
   const deleteRecipe = useDeleteFnbRecipe();
@@ -123,9 +134,9 @@ export default function FnbInventory() {
   };
 
   const handleLogWaste = async () => {
-    if (!wasteProductId || !wasteWarehouseId) return;
+    if (!wasteProductId || !wasteDialogWarehouseId) return;
     await createWasteLog.mutateAsync({
-      warehouseId: wasteWarehouseId,
+      warehouseId: wasteDialogWarehouseId,
       productId: wasteProductId,
       quantity: parseFloat(wasteQty) || 1,
       unit: wasteUnit,
@@ -134,6 +145,7 @@ export default function FnbInventory() {
       notes: wasteNotes || undefined,
     });
     setWasteDialogOpen(false);
+    setWasteDialogWarehouseId("");
     setWasteProductId("");
     setWasteQty("1");
     setWasteUnit("pcs");
@@ -155,6 +167,7 @@ export default function FnbInventory() {
           </p>
         </div>
 
+        <QueryBoundary isLoading={recipesLoading} isError={!!recipesError} error={recipesErrorObj ?? undefined} refetch={refetchRecipes}>
         <Tabs defaultValue="recipes">
           <TabsList>
             <TabsTrigger value="recipes">Recipes & BOM</TabsTrigger>
@@ -422,7 +435,7 @@ export default function FnbInventory() {
                     <SelectValue placeholder="All warehouses" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All warehouses</SelectItem>
+                    <SelectItem value="_all_">All warehouses</SelectItem>
                     {warehouses.map((w) => (
                       <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
                     ))}
@@ -446,14 +459,18 @@ export default function FnbInventory() {
                   <div className="grid gap-4 py-4">
                     <div>
                       <Label>Warehouse *</Label>
-                      <Select value={wasteWarehouseId} onValueChange={setWasteWarehouseId} required>
+                      <Select value={wasteDialogWarehouseId} onValueChange={setWasteDialogWarehouseId} required>
                         <SelectTrigger>
                           <SelectValue placeholder="Select warehouse" />
                         </SelectTrigger>
                         <SelectContent>
-                          {warehouses.map((w) => (
-                            <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
-                          ))}
+                          {warehouses.length === 0 ? (
+                            <SelectItem value="_empty_wh" disabled>No warehouses. Create one in Settings first.</SelectItem>
+                          ) : (
+                            warehouses.map((w) => (
+                              <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -464,11 +481,15 @@ export default function FnbInventory() {
                           <SelectValue placeholder="Select product" />
                         </SelectTrigger>
                         <SelectContent>
-                          {products.map((p) => (
+                          {products.length === 0 ? (
+                            <SelectItem value="_empty_prod" disabled>No products. Add products first.</SelectItem>
+                          ) : (
+                            products.map((p) => (
                             <SelectItem key={p.id} value={p.id}>
                               {p.name}{p.unit ? ` (${p.unit})` : ""}
                             </SelectItem>
-                          ))}
+                          ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -515,7 +536,7 @@ export default function FnbInventory() {
                     <Button variant="outline" onClick={() => setWasteDialogOpen(false)}>Cancel</Button>
                     <Button
                       onClick={() => void handleLogWaste()}
-                      disabled={!wasteProductId || !wasteWarehouseId || createWasteLog.isPending}
+                      disabled={!wasteProductId || !wasteDialogWarehouseId || createWasteLog.isPending || warehouses.length === 0 || products.length === 0}
                     >
                       {createWasteLog.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                       Log Waste
@@ -573,6 +594,7 @@ export default function FnbInventory() {
             </Card>
           </TabsContent>
         </Tabs>
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );

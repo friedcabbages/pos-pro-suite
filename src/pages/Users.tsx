@@ -55,6 +55,7 @@ import {
 } from "@/hooks/useUserSessions";
 import { useAuth } from "@/contexts/AuthContext";
 import { Skeleton } from "@/components/ui/skeleton";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -85,12 +86,12 @@ export default function Users() {
     phone: "",
     username: "",
     role: "cashier" as "admin" | "cashier",
-    branch_id: "",
+    branch_id: "_all_",
   });
 
   const { user } = useAuth();
   const { business, branches, isOwner, isAdmin } = useBusiness();
-  const { data: users, isLoading } = useUsers();
+  const { data: users, isLoading, isError, error, refetch } = useUsers();
   const createUser = useCreateUser();
   const deleteUser = useDeleteUser();
   const updateUserRole = useUpdateUserRole();
@@ -151,7 +152,7 @@ export default function Users() {
         phone: formData.phone || undefined,
         username: formData.username.trim() || undefined,
         role: formData.role,
-        branch_id: formData.branch_id || undefined,
+        branch_id: formData.branch_id === "_all_" || !formData.branch_id ? undefined : formData.branch_id,
       },
       {
         onSuccess: () => {
@@ -163,7 +164,7 @@ export default function Users() {
             phone: "",
             username: "",
             role: "cashier",
-            branch_id: "",
+            branch_id: "_all_",
           });
         },
         onError: (err: any) => {
@@ -332,7 +333,7 @@ export default function Users() {
                           <SelectValue placeholder="All branches" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">All Branches</SelectItem>
+                          <SelectItem value="_all_">All Branches</SelectItem>
                           {branches.map((branch) => (
                             <SelectItem key={branch.id} value={branch.id}>
                               {branch.name}
@@ -352,6 +353,7 @@ export default function Users() {
           )}
         </div>
 
+        <QueryBoundary isLoading={isLoading} isError={!!isError} error={error ?? undefined} refetch={refetch}>
         {/* Role Summary */}
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl border border-border bg-card p-4 shadow-card">
@@ -507,6 +509,8 @@ export default function Users() {
             </Table>
           )}
         </div>
+
+        </QueryBoundary>
 
         {/* Active Sessions */}
         {canManageSessions && (

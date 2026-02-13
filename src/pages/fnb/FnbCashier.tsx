@@ -3,54 +3,60 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Label } from "@/components/ui/label";
 import { Receipt, CreditCard, Banknote, QrCode, CheckCircle2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { toast } from "sonner";
+import { QueryBoundary } from "@/components/QueryBoundary";
+import { useBusiness } from "@/contexts/BusinessContext";
+import {
+  useFnbCashierTables,
+  useFnbOpenBills,
+  useFnbOpenBillDetails,
+  useCloseFnbBill,
+  useFnbCashierRealtime,
+} from "@/hooks/useFnbCashier";
 
 export default function FnbCashier() {
-  const { toast } = useToast();
-  const [selectedTable] = useState<string | null>("1");
+  const { business } = useBusiness();
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  useFnbCashierRealtime();
   const [paymentMethod, setPaymentMethod] = useState<"cash" | "card" | "qris" | null>(null);
 
-  const bills = [
-    {
-      id: "1",
-      tableName: "Table 1",
-      orders: [
-        { id: "1", items: 3, total: 125000 },
-        { id: "2", items: 2, total: 85000 },
-      ],
-      subtotal: 210000,
-      serviceCharge: 0,
-      tax: 0,
-      total: 210000,
-    },
-  ];
+  const { data: tables = [], isLoading: tablesLoading, isError: tablesError, error: tablesErrorObj, refetch: refetchTables } = useFnbCashierTables();
+  const { data: openBills = [] } = useFnbOpenBills();
+  const { data: billDetails, isLoading: billDetailsLoading } = useFnbOpenBillDetails(selectedTableId);
+  const closeBill = useCloseFnbBill();
 
-  const currentBill = bills.find((b) => b.id === selectedTable);
+  const openBillTableIds = new Set(openBills.map((b) => (b as { table_id: string }).table_id).filter(Boolean));
 
   const formatCurrency = (value: number) => {
+    const currency = business?.currency ?? "IDR";
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
-      currency: "IDR",
+      currency,
       minimumFractionDigits: 0,
     }).format(value);
   };
 
   const handleCheckout = () => {
     if (!paymentMethod) {
-      toast({
-        title: "Select payment method",
-        description: "Please select a payment method to continue.",
-        variant: "destructive",
-      });
+      toast.error("Please select a payment method to continue.");
       return;
     }
+    if (!selectedTableId || !billDetails) return;
+    closeBill.mutate(
+      { tableId: selectedTableId },
+      {
+        onSuccess: () => {
+          setSelectedTableId(null);
+          setPaymentMethod(null);
+        },
+      }
+    );
+  };
 
-    toast({
-      title: "Payment processed",
-      description: `Bill closed successfully via ${paymentMethod}.`,
-    });
+  const handleTableSelect = (tableId: string) => {
+    setSelectedTableId((prev) => (prev === tableId ? null : tableId));
   };
 
   return (
@@ -66,6 +72,7 @@ export default function FnbCashier() {
           </p>
         </div>
 
+        <QueryBoundary isLoading={tablesLoading} isError={!!tablesError} error={tablesErrorObj ?? undefined} refetch={refetchTables}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader>
@@ -73,59 +80,94 @@ export default function FnbCashier() {
               <CardDescription>Choose a table to view its bill</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-4 gap-2">
-                {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
-                  <Button
-                    key={num}
-                    variant={selectedTable === String(num) ? "default" : "outline"}
-                    onClick={() => {}}
-                  >
-                    Table {num}
-                  </Button>
-                ))}
-              </div>
+              {tablesLoading ? (
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-10 rounded-md bg-muted animate-pulse" />
+                  ))}
+                </div>
+              ) : tables.length === 0 ? (
+                <div className="p-6 border rounded-lg bg-muted/50">
+                  <p className="text-muted-foreground text-center">
+                    No tables configured. Add tables in Floor Plan or Tables & QR.
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-4 gap-2">
+                  {tables.map((table) => {
+                    const hasOpenBill = openBillTableIds.has(table.id);
+                    return (
+                      <Button
+                        key={table.id}
+                        variant={selectedTableId === table.id ? "default" : "outline"}
+                        onClick={() => handleTableSelect(table.id)}
+                        className={hasOpenBill ? "ring-2 ring-primary/50" : ""}
+                      >
+                        <span className="truncate">{table.name}</span>
+                        {hasOpenBill && (
+                          <span className="ml-1 text-xs opacity-80">(bill)</span>
+                        )}
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
 
-              {currentBill && (
+              {selectedTableId && !billDetailsLoading && billDetails && (
                 <div className="mt-6 space-y-4">
                   <div>
                     <h3 className="font-semibold mb-2">Orders</h3>
                     <div className="space-y-2">
-                      {currentBill.orders.map((order) => (
-                        <div
-                          key={order.id}
-                          className="flex justify-between p-2 border rounded"
-                        >
-                          <span>Order #{order.id}</span>
-                          <span className="font-medium">
-                            {formatCurrency(order.total)}
-                          </span>
-                        </div>
-                      ))}
+                      {billDetails.orders.length === 0 ? (
+                        <p className="text-muted-foreground text-sm">
+                          No orders in this bill
+                        </p>
+                      ) : (
+                        billDetails.orders.map((order) => (
+                          <div
+                            key={order.id}
+                            className="flex justify-between p-2 border rounded"
+                          >
+                            <span>Order #{order.id.slice(0, 8)}</span>
+                            <span className="font-medium">
+                              {formatCurrency(order.total)}
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 
                   <div className="border-t pt-4 space-y-2">
                     <div className="flex justify-between">
                       <span>Subtotal</span>
-                      <span>{formatCurrency(currentBill.subtotal)}</span>
+                      <span>{formatCurrency(billDetails.subtotal)}</span>
                     </div>
-                    {currentBill.serviceCharge > 0 && (
+                    {billDetails.serviceCharge > 0 && (
                       <div className="flex justify-between">
                         <span>Service Charge</span>
-                        <span>{formatCurrency(currentBill.serviceCharge)}</span>
+                        <span>{formatCurrency(billDetails.serviceCharge)}</span>
                       </div>
                     )}
-                    {currentBill.tax > 0 && (
+                    {billDetails.taxAmount > 0 && (
                       <div className="flex justify-between">
                         <span>Tax</span>
-                        <span>{formatCurrency(currentBill.tax)}</span>
+                        <span>{formatCurrency(billDetails.taxAmount)}</span>
                       </div>
                     )}
                     <div className="flex justify-between text-lg font-bold border-t pt-2">
                       <span>Total</span>
-                      <span>{formatCurrency(currentBill.total)}</span>
+                      <span>{formatCurrency(billDetails.total)}</span>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {selectedTableId && !billDetailsLoading && !billDetails && (
+                <div className="mt-6 p-4 border rounded-lg bg-muted/50">
+                  <p className="text-muted-foreground">
+                    No open bill for this table. Select a table with an active bill.
+                  </p>
                 </div>
               )}
             </CardContent>
@@ -163,12 +205,12 @@ export default function FnbCashier() {
                 </Button>
               </div>
 
-              {paymentMethod && currentBill && (
+              {paymentMethod && billDetails && (
                 <div className="space-y-2">
                   <Label>Payment Amount</Label>
                   <Input
                     type="number"
-                    defaultValue={currentBill.total}
+                    defaultValue={billDetails.total}
                     placeholder="Enter amount"
                   />
                 </div>
@@ -178,14 +220,15 @@ export default function FnbCashier() {
                 className="w-full"
                 size="lg"
                 onClick={handleCheckout}
-                disabled={!currentBill || !paymentMethod}
+                disabled={!billDetails || !paymentMethod || closeBill.isPending}
               >
                 <CheckCircle2 className="h-4 w-4 mr-2" />
-                Process Payment
+                {closeBill.isPending ? "Processing..." : "Process Payment"}
               </Button>
             </CardContent>
           </Card>
         </div>
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );

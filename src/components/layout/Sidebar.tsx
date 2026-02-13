@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBusiness } from "@/contexts/BusinessContext";
@@ -42,63 +42,85 @@ type NavItem = {
   featureKey?: PlanFeatureKey;
 };
 
-// Navigation items per business type
-const getNavigationForBusinessType = (businessType: string): NavItem[] => {
-  const globalNav: NavItem[] = [
-    { name: "Dashboard", href: "/app", icon: LayoutDashboard },
-    { name: "Users", href: "/users", icon: Users, ownerOnly: true },
-    { name: "Settings", href: "/settings", icon: Settings, ownerOnly: true },
-    { name: "Subscription", href: "/subscription", icon: Crown, ownerOnly: true },
-  ];
+type NavGroups = { main: NavItem[]; account: NavItem[] };
 
+const accountNav: NavItem[] = [
+  { name: "Users", href: "/users", icon: Users, ownerOnly: true },
+  { name: "Settings", href: "/settings", icon: Settings, ownerOnly: true },
+  { name: "Subscription", href: "/subscription", icon: Crown, ownerOnly: true },
+];
+
+// Navigation items per business type (grouped: main + account)
+const getNavigationForBusinessType = (businessType: string): NavGroups => {
   switch (businessType) {
     case "retail":
-      return [
-        ...globalNav,
-        { name: "POS / Cashier", href: "/retail/pos", icon: ShoppingCart },
-        { name: "Products", href: "/retail/products", icon: Package },
-        { name: "Categories", href: "/retail/categories", icon: Tag, adminOnly: true },
-        { name: "Inventory", href: "/retail/inventory", icon: Boxes, adminOnly: true },
-        { name: "Suppliers", href: "/retail/suppliers", icon: Truck, adminOnly: true },
-        {
-          name: "Purchase Orders",
-          href: "/retail/purchase-orders",
-          icon: ClipboardList,
-          adminOnly: true,
-          featureKey: "purchase_orders",
-        },
-        { name: "Warehouses", href: "/retail/warehouses", icon: Warehouse, adminOnly: true },
-        { name: "Transactions", href: "/retail/transactions", icon: Receipt, adminOnly: true },
-        { name: "Expenses", href: "/retail/expenses", icon: DollarSign, adminOnly: true, featureKey: "expenses" },
-        { name: "Reports", href: "/retail/reports", icon: TrendingUp, adminOnly: true },
-        {
-          name: "Audit Logs",
-          href: "/retail/audit-logs",
-          icon: FileText,
-          adminOnly: true,
-          featureKey: "audit_logs_full",
-        },
-        { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
-      ];
+      return {
+        main: [
+          // Overview
+          { name: "Dashboard", href: "/app", icon: LayoutDashboard },
+          // Operations
+          { name: "POS / Cashier", href: "/retail/pos", icon: ShoppingCart },
+          { name: "Transactions", href: "/retail/transactions", icon: Receipt, adminOnly: true },
+          // Catalog
+          { name: "Products", href: "/retail/products", icon: Package },
+          { name: "Categories", href: "/retail/categories", icon: Tag, adminOnly: true },
+          // Inventory & Supply
+          { name: "Inventory", href: "/retail/inventory", icon: Boxes, adminOnly: true },
+          { name: "Suppliers", href: "/retail/suppliers", icon: Truck, adminOnly: true },
+          {
+            name: "Purchase Orders",
+            href: "/retail/purchase-orders",
+            icon: ClipboardList,
+            adminOnly: true,
+            featureKey: "purchase_orders",
+          },
+          { name: "Warehouses", href: "/retail/warehouses", icon: Warehouse, adminOnly: true },
+          // Finance & Insights
+          { name: "Expenses", href: "/retail/expenses", icon: DollarSign, adminOnly: true, featureKey: "expenses" },
+          { name: "Reports", href: "/retail/reports", icon: TrendingUp, adminOnly: true },
+          // Compliance
+          {
+            name: "Audit Logs",
+            href: "/retail/audit-logs",
+            icon: FileText,
+            adminOnly: true,
+            featureKey: "audit_logs_full",
+          },
+          { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
+        ],
+        account: accountNav,
+      };
 
     case "fnb":
-      return [
-        ...globalNav,
-        { name: "F&B Dashboard", href: "/fnb/dashboard", icon: UtensilsCrossed },
-        { name: "Floor Plan", href: "/fnb/floor-plan", icon: LayoutGrid, adminOnly: true },
-        { name: "Tables & QR", href: "/fnb/tables", icon: Table, adminOnly: true },
-        { name: "Order Queue", href: "/fnb/orders", icon: ShoppingBag },
-        { name: "Kitchen Display", href: "/fnb/kds", icon: ChefHat },
-        { name: "Cashier", href: "/fnb/cashier", icon: Receipt },
-        { name: "Menu", href: "/fnb/menu", icon: Package, adminOnly: true },
-        { name: "Inventory (BOM)", href: "/fnb/inventory", icon: Boxes, adminOnly: true },
-        { name: "Promo & Bundles", href: "/fnb/promo", icon: Tag, adminOnly: true },
-        { name: "Reports", href: "/fnb/reports", icon: BarChart3, adminOnly: true },
-        { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
-      ];
+      return {
+        main: [
+          // Overview
+          { name: "Dashboard", href: "/app", icon: LayoutDashboard },
+          { name: "F&B Dashboard", href: "/fnb/dashboard", icon: UtensilsCrossed },
+          // Operations
+          { name: "Floor Plan", href: "/fnb/floor-plan", icon: LayoutGrid, adminOnly: true },
+          { name: "Tables & QR", href: "/fnb/tables", icon: Table, adminOnly: true },
+          { name: "Order Queue", href: "/fnb/orders", icon: ShoppingBag },
+          { name: "Kitchen Display", href: "/fnb/kds", icon: ChefHat },
+          { name: "Cashier", href: "/fnb/cashier", icon: Receipt },
+          // Catalog
+          { name: "Menu", href: "/fnb/menu", icon: Package, adminOnly: true },
+          // Inventory & Supply
+          { name: "Inventory (BOM)", href: "/fnb/inventory", icon: Boxes, adminOnly: true },
+          // Finance & Insights
+          { name: "Promo & Bundles", href: "/fnb/promo", icon: Tag, adminOnly: true },
+          { name: "Reports", href: "/fnb/reports", icon: BarChart3, adminOnly: true },
+          // Compliance
+          { name: "Activity", href: "/activity", icon: FileText, adminOnly: true },
+        ],
+        account: accountNav,
+      };
 
     default:
-      return globalNav;
+      return {
+        main: [{ name: "Dashboard", href: "/app", icon: LayoutDashboard }],
+        account: accountNav,
+      };
   }
 };
 
@@ -106,7 +128,6 @@ export function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const { clearBusiness, userRole, isAdmin, isOwner, business } = useBusiness();
   const plan = usePlanAccess();
@@ -134,17 +155,38 @@ export function Sidebar() {
   };
 
   // Get navigation based on business type
-  const navigation = business?.business_type
+  const navGroups = business?.business_type
     ? getNavigationForBusinessType(business.business_type)
-    : [];
+    : { main: [], account: [] };
 
-  // Filter navigation based on user role
-  const filteredNavigation = navigation.filter((item) => {
+  const filterItem = (item: NavItem) => {
     if (item.ownerOnly && !isOwner) return false;
     if (item.adminOnly && !isAdmin && !isOwner) return false;
     if (item.featureKey && !plan.canUse(item.featureKey)) return false;
     return true;
-  });
+  };
+
+  const filteredMain = navGroups.main.filter(filterItem);
+  const filteredAccount = navGroups.account.filter(filterItem);
+
+  const renderNavLink = (item: NavItem) => {
+    const isActive = location.pathname === item.href;
+    return (
+      <Link
+        key={item.name}
+        to={item.href}
+        className={cn(
+          "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+          isActive
+            ? "bg-primary/10 text-primary"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        )}
+      >
+        <item.icon className="h-4 w-4 shrink-0" />
+        {!collapsed && <span>{item.name}</span>}
+      </Link>
+    );
+  };
 
   return (
     <aside
@@ -176,26 +218,20 @@ export function Sidebar() {
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-3 px-2">
           <div className="space-y-0.5">
-            {filteredNavigation.map((item) => {
-              const isActive = location.pathname === item.href;
-
-              return (
-                <Link
-                  key={item.name}
-                  to={item.href}
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
-                    isActive
-                      ? "bg-primary/10 text-primary"
-                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                  )}
-                >
-                  <item.icon className="h-4 w-4 shrink-0" />
-                  {!collapsed && <span>{item.name}</span>}
-                </Link>
-              );
-            })}
+            {filteredMain.map(renderNavLink)}
           </div>
+          {filteredAccount.length > 0 && (
+            <>
+              <div className="mt-4 border-t border-border pt-3">
+                {!collapsed && (
+                  <p className="mb-2 px-2.5 text-xs font-medium text-muted-foreground">Account</p>
+                )}
+                <div className="space-y-0.5">
+                  {filteredAccount.map(renderNavLink)}
+                </div>
+              </div>
+            </>
+          )}
         </nav>
 
         {/* User section */}

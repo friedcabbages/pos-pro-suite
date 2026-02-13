@@ -168,7 +168,7 @@ export default function Auth() {
           case 'retail':
             return '/retail/pos';
           case 'fnb':
-            return '/fnb/dashboard';
+            return '/app';
           case 'service':
             return '/service/dashboard';
           case 'venue':

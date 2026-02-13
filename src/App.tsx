@@ -70,7 +70,20 @@ import PricingPage from "./pages/marketing/PricingPage";
 import ContactPage from "./pages/marketing/ContactPage";
 import MarketingLayout from "./pages/marketing/MarketingLayout";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: (failureCount, _error) => {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+        return failureCount < 3;
+      },
+      refetchOnWindowFocus: (query) => {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+        return true;
+      },
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>

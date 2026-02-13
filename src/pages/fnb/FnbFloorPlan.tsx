@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { LayoutGrid, Plus } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -26,7 +27,7 @@ import { supabase } from "@/integrations/supabase/client";
 export default function FnbFloorPlan() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: tables = [], isLoading } = useFnbTables();
+  const { data: tables = [], isLoading, isError, error, refetch } = useFnbTables();
   const createTable = useCreateFnbTable();
   const updateTable = useUpdateFnbTable();
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
@@ -177,6 +178,7 @@ export default function FnbFloorPlan() {
           </div>
         </div>
 
+        <QueryBoundary isLoading={isLoading} isError={!!isError} error={error ?? undefined} refetch={refetch}>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           <Card className="lg:col-span-1">
             <CardHeader>
@@ -268,6 +270,7 @@ export default function FnbFloorPlan() {
             </CardContent>
           </Card>
         </div>
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );

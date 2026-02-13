@@ -110,22 +110,26 @@ export function ProtectedRoute({ children, requiredRole, adminOnly }: ProtectedR
     return <Navigate to="/onboarding" replace />;
   }
 
-  // Check business status - suspended accounts
-  if (businessStatus === 'suspended') {
-    console.log('[ProtectedRoute] Business suspended, redirecting to /account-suspended');
-    return <Navigate to="/account-suspended" replace />;
-  }
+  // When offline, skip subscription checks (cannot verify with server; allow access with cached data)
+  const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+  if (!isOffline) {
+    // Check business status - suspended accounts
+    if (businessStatus === 'suspended') {
+      console.log('[ProtectedRoute] Business suspended, redirecting to /account-suspended');
+      return <Navigate to="/account-suspended" replace />;
+    }
 
-  // Check business status - expired or trial expired
-  if (businessStatus === 'expired' || isTrialExpired) {
-    console.log('[ProtectedRoute] Subscription expired, redirecting to /subscription-required');
-    return <Navigate to="/subscription-required" replace />;
-  }
+    // Check business status - expired or trial expired
+    if (businessStatus === 'expired' || isTrialExpired) {
+      console.log('[ProtectedRoute] Subscription expired, redirecting to /subscription-required');
+      return <Navigate to="/subscription-required" replace />;
+    }
 
-  // Ensure subscription is active
-  if (!isSubscriptionActive) {
-    console.log('[ProtectedRoute] Subscription not active, redirecting to /subscription-required');
-    return <Navigate to="/subscription-required" replace />;
+    // Ensure subscription is active
+    if (!isSubscriptionActive) {
+      console.log('[ProtectedRoute] Subscription not active, redirecting to /subscription-required');
+      return <Navigate to="/subscription-required" replace />;
+    }
   }
 
   // Business type route enforcement - prefix-based standalone

@@ -41,6 +41,7 @@ export function useFnbMenuItems(branchId?: string | null) {
       return data ?? [];
     },
     enabled: !!business?.id,
+    refetchInterval: 5000,
   });
 }
 
@@ -60,6 +61,7 @@ export function useFnbModifierGroups() {
       return data ?? [];
     },
     enabled: !!business?.id,
+    refetchInterval: 5000,
   });
 }
 
@@ -95,6 +97,7 @@ export function useFnbProductModifierGroups(productIds: string[]) {
       return data ?? [];
     },
     enabled: productIds.length > 0,
+    refetchInterval: 5000,
   });
 }
 
@@ -120,6 +123,8 @@ export function useSetProductAsMenuItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fnb-menu-items'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['fnb-products-not-on-menu'] });
     },
     onError: (e) => toast.error(String(e)),
   });
@@ -139,6 +144,8 @@ export function useUnsetProductAsMenuItem() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fnb-menu-items'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['fnb-products-not-on-menu'] });
     },
     onError: (e) => toast.error(String(e)),
   });
@@ -224,6 +231,7 @@ export function useLinkProductToModifierGroup() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fnb-product-modifier-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['fnb-menu-items'] });
     },
     onError: (e) => toast.error(String(e)),
   });
@@ -242,6 +250,7 @@ export function useUnlinkProductFromModifierGroup() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['fnb-product-modifier-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['fnb-menu-items'] });
     },
     onError: (e) => toast.error(String(e)),
   });
@@ -660,12 +669,18 @@ export function useCreateFnbWasteLog() {
       notes?: string;
     }) => {
       if (!business?.id) throw new Error('No business selected');
-      const { data: inv } = await supabase
+      let invQuery = supabase
         .from('inventory')
         .select('id, quantity')
         .eq('product_id', params.productId)
-        .eq('warehouse_id', params.warehouseId)
-        .maybeSingle();
+        .eq('warehouse_id', params.warehouseId);
+      if (params.batchNumber) {
+        invQuery = invQuery.eq('batch_number', params.batchNumber);
+      }
+      const { data: invRows, error: invErr } = await invQuery
+        .order('expiry_date', { ascending: true, nullsFirst: false })
+        .limit(10);
+      const inv = Array.isArray(invRows) && invRows.length > 0 ? invRows[0] : null;
       const currentQty = inv?.quantity ?? 0;
       const deduct = params.quantity;
       if (currentQty < deduct) throw new Error('Not enough stock to record waste');

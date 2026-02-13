@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Table, Plus, QrCode, Download, RefreshCw } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { useFnbTables, useCreateFnbTable, useRegenerateTableToken } from "@/hooks/useFnb";
 import { useToast } from "@/hooks/use-toast";
 
@@ -21,7 +22,7 @@ const ORDER_BASE = import.meta.env.VITE_APP_URL || window.location.origin;
 
 export default function FnbTables() {
   const { toast } = useToast();
-  const { data: tables = [], isLoading } = useFnbTables();
+  const { data: tables = [], isLoading, isError, error, refetch } = useFnbTables();
   const createTable = useCreateFnbTable();
   const regenerateToken = useRegenerateTableToken();
   const [addOpen, setAddOpen] = useState(false);
@@ -149,9 +150,8 @@ export default function FnbTables() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : tables.length === 0 ? (
+        <QueryBoundary isLoading={isLoading} isError={!!isError} error={error ?? undefined} refetch={refetch}>
+        {tables.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Table className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -224,6 +224,7 @@ export default function FnbTables() {
             })}
           </div>
         )}
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );

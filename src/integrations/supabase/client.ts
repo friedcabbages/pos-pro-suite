@@ -10,7 +10,9 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 // import { supabase } from "@/integrations/supabase/client";
 
 const offlineFetch: typeof fetch = (input, init) => {
-  if (getConnectivityMode() === "offline") {
+  const isManualOffline = getConnectivityMode() === "offline";
+  const isNetworkOffline = typeof navigator !== "undefined" && !navigator.onLine;
+  if (isManualOffline || isNetworkOffline) {
     return Promise.resolve(
       new Response(JSON.stringify({ message: "Offline mode enabled" }), {
         status: 503,

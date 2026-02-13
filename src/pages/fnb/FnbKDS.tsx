@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChefHat, Clock, Printer, CheckCircle2 } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { useToast } from "@/hooks/use-toast";
 import {
   useFnbOrders,
@@ -15,7 +16,7 @@ export default function FnbKDS() {
   const { toast } = useToast();
   const [activeStation, setActiveStation] = useState<"kitchen" | "bar">("kitchen");
 
-  const { data: orders = [], isLoading } = useFnbOrders({
+  const { data: orders = [], isLoading, isError, error, refetch } = useFnbOrders({
     statusIn: ["accepted", "preparing", "ready"],
   });
   const updateItemStatus = useUpdateFnbOrderItemStatus();
@@ -60,6 +61,7 @@ export default function FnbKDS() {
           </p>
         </div>
 
+        <QueryBoundary isLoading={isLoading} isError={!!isError} error={error ?? undefined} refetch={refetch}>
         <Tabs value={activeStation} onValueChange={(v) => setActiveStation(v as "kitchen" | "bar")} className="w-full">
           <TabsList className="mb-4">
             <TabsTrigger value="kitchen">Kitchen</TabsTrigger>
@@ -67,9 +69,7 @@ export default function FnbKDS() {
           </TabsList>
 
           <TabsContent value="kitchen" className="space-y-4">
-            {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading...</div>
-            ) : grouped.length === 0 ? (
+            {grouped.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -150,9 +150,7 @@ export default function FnbKDS() {
           </TabsContent>
 
           <TabsContent value="bar" className="space-y-4">
-            {isLoading ? (
-              <div className="text-center py-12 text-muted-foreground">Loading...</div>
-            ) : grouped.length === 0 ? (
+            {grouped.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
                   <ChefHat className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -232,6 +230,7 @@ export default function FnbKDS() {
             )}
           </TabsContent>
         </Tabs>
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );

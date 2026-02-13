@@ -20,7 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Package, Plus, Search, Edit, Trash2, Sliders } from "lucide-react";
+import { Package, Plus, Search, Trash2, Sliders } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   useFnbMenuItems,
   useFnbModifierGroups,
@@ -30,33 +32,35 @@ import {
   useCreateModifierGroup,
   useCreateModifier,
   useLinkProductToModifierGroup,
+  useUnlinkProductFromModifierGroup,
 } from "@/hooks/useFnb";
-import { useProducts } from "@/hooks/useProducts";
+import { useToggleMenuItemAvailability, useProductsNotOnMenu, useFnbMenuRealtime } from "@/hooks/useFnbMenu";
 import { useCategories } from "@/hooks/useCategories";
-import { supabase } from "@/integrations/supabase/client";
 import { useBusiness } from "@/contexts/BusinessContext";
-import { toast } from "sonner";
 
 export default function FnbMenu() {
   const { business } = useBusiness();
+  useFnbMenuRealtime();
   const [search, setSearch] = useState("");
   const [addOpen, setAddOpen] = useState(false);
   const [modifierOpen, setModifierOpen] = useState(false);
+  const [modifiersDialogProductId, setModifiersDialogProductId] = useState<string | null>(null);
 
-  const { data: menuItems = [], isLoading } = useFnbMenuItems();
+  const { data: menuItems = [], isLoading, isError, error, refetch } = useFnbMenuItems();
   const { data: modifierGroups = [] } = useFnbModifierGroups();
   const productIds = menuItems.map((p) => p.id);
   const { data: productModifierGroups = [] } = useFnbProductModifierGroups(productIds);
-  const { data: products = [] } = useProducts();
+  const { data: productsNotOnMenu = [] } = useProductsNotOnMenu();
   const { data: categories = [] } = useCategories();
   const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
-  const productsNotOnMenu = products.filter((p) => !p.is_menu_item);
 
   const setAsMenuItem = useSetProductAsMenuItem();
   const unsetAsMenuItem = useUnsetProductAsMenuItem();
+  const toggleAvailability = useToggleMenuItemAvailability();
   const createModifierGroup = useCreateModifierGroup();
   const createModifier = useCreateModifier();
   const linkProductToModifierGroup = useLinkProductToModifierGroup();
+  const unlinkProductFromModifierGroup = useUnlinkProductFromModifierGroup();
 
   const formatCurrency = (value: number) =>
     new Intl.NumberFormat("id-ID", {
@@ -70,14 +74,8 @@ export default function FnbMenu() {
     return modifierGroups.filter((g) => pmg.some((p) => p.group_id === g.id));
   };
 
-  const handleToggleAvailable = async (id: string, current: boolean) => {
-    const { error } = await supabase
-      .from("products")
-      .update({ is_available: !current })
-      .eq("id", id)
-      .eq("business_id", business!.id);
-    if (error) toast.error(error.message);
-    else toast.success(current ? "Marked unavailable" : "Marked available");
+  const handleToggleAvailable = (id: string, current: boolean) => {
+    toggleAvailability.mutate({ productId: id, current });
   };
 
   const handleAddToMenu = async (productId: string, prepStation: "kitchen" | "bar") => {
@@ -158,9 +156,8 @@ export default function FnbMenu() {
           </div>
         </div>
 
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : filtered.length === 0 ? (
+        <QueryBoundary isLoading={isLoading} isError={!!isError} error={error ?? undefined} refetch={refetch}>
+        {filtered.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Package className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -209,12 +206,21 @@ export default function FnbMenu() {
                           ))}
                         </div>
                       )}
-                      <div className="flex gap-2 pt-2">
+                      <div className="flex flex-wrap gap-2 pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setModifiersDialogProductId(item.id)}
+                        >
+                          <Sliders className="h-4 w-4 mr-2" />
+                          Modifiers
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
                           className="flex-1"
                           onClick={() => handleToggleAvailable(item.id, !!item.is_available)}
+                          disabled={toggleAvailability.isPending}
                         >
                           {item.is_available ? "Unavailable" : "Available"}
                         </Button>
@@ -235,8 +241,96 @@ export default function FnbMenu() {
             })}
           </div>
         )}
+        </QueryBoundary>
+
+        <Dialog open={!!modifiersDialogProductId} onOpenChange={(open) => !open && setModifiersDialogProductId(null)}>
+          <DialogContent>
+            {modifiersDialogProductId && (
+              <AssignModifiersDialog
+                productId={modifiersDialogProductId}
+                productName={menuItems.find((i) => i.id === modifiersDialogProductId)?.name ?? ""}
+                modifierGroups={modifierGroups}
+                productModifierGroups={productModifierGroups}
+                linkProductToModifierGroup={linkProductToModifierGroup}
+                unlinkProductFromModifierGroup={unlinkProductFromModifierGroup}
+                onClose={() => setModifiersDialogProductId(null)}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
+  );
+}
+
+function AssignModifiersDialog({
+  productId,
+  productName,
+  modifierGroups,
+  productModifierGroups,
+  linkProductToModifierGroup,
+  unlinkProductFromModifierGroup,
+  onClose,
+}: {
+  productId: string;
+  productName: string;
+  modifierGroups: Array<{ id: string; name: string }>;
+  productModifierGroups: Array<{ product_id: string; group_id: string }>;
+  linkProductToModifierGroup: ReturnType<typeof useLinkProductToModifierGroup>;
+  unlinkProductFromModifierGroup: ReturnType<typeof useUnlinkProductFromModifierGroup>;
+  onClose: () => void;
+}) {
+  const linkedGroupIds = new Set(
+    productModifierGroups.filter((p) => p.product_id === productId).map((p) => p.group_id)
+  );
+
+  const handleToggle = (groupId: string, checked: boolean) => {
+    if (checked) {
+      linkProductToModifierGroup.mutate({ productId, groupId });
+    } else {
+      unlinkProductFromModifierGroup.mutate({ productId, groupId });
+    }
+  };
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Assign Modifier Groups</DialogTitle>
+        <DialogDescription>
+          Select modifier groups for {productName || "this item"}
+        </DialogDescription>
+      </DialogHeader>
+      <div className="space-y-3 py-4">
+        {modifierGroups.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No modifier groups yet. Create groups in Modifier Groups first.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {modifierGroups.map((g) => (
+              <div key={g.id} className="flex items-center space-x-2">
+                <Checkbox
+                  id={`mod-${g.id}`}
+                  checked={linkedGroupIds.has(g.id)}
+                  onCheckedChange={(checked) => handleToggle(g.id, !!checked)}
+                />
+                <label
+                  htmlFor={`mod-${g.id}`}
+                  className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  {g.name}
+                </label>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+      <DialogFooter>
+        <Button variant="outline" onClick={onClose}>
+          Done
+        </Button>
+      </DialogFooter>
+    </>
   );
 }
 

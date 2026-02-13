@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ShoppingBag, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { QueryBoundary } from "@/components/QueryBoundary";
 import { useToast } from "@/hooks/use-toast";
 import { useFnbOrders, useUpdateFnbOrderStatus } from "@/hooks/useFnb";
 import { useBusiness } from "@/contexts/BusinessContext";
@@ -10,7 +11,7 @@ import { useBusiness } from "@/contexts/BusinessContext";
 export default function FnbOrders() {
   const { toast } = useToast();
   const { business } = useBusiness();
-  const { data: orders = [], isLoading } = useFnbOrders({
+  const { data: orders = [], isLoading, isError, error, refetch } = useFnbOrders({
     statusIn: ["pending", "accepted", "preparing", "ready"],
   });
   const updateStatus = useUpdateFnbOrderStatus();
@@ -47,9 +48,8 @@ export default function FnbOrders() {
           </p>
         </div>
 
-        {isLoading ? (
-          <div className="text-center py-12 text-muted-foreground">Loading...</div>
-        ) : pendingOrders.length === 0 ? (
+        <QueryBoundary isLoading={isLoading} isError={!!isError} error={error ?? undefined} refetch={refetch}>
+        {pendingOrders.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
@@ -105,6 +105,7 @@ export default function FnbOrders() {
             })}
           </div>
         )}
+        </QueryBoundary>
       </div>
     </DashboardLayout>
   );
