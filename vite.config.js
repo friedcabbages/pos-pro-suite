@@ -7,7 +7,13 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: true,
     port: 3000,
-    allowedHosts: "all",
+    allowedHosts: [
+      "velopos.site",
+      ".velopos.site",
+      "www.velopos.site",
+      "localhost",
+      ".localhost",
+    ],
   },
 
   plugins: [
